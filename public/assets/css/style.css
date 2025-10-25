@@ -1,0 +1,270 @@
+/* Google font */
+@import url('https://fonts.googleapis.com/css2?family=Inria+Sans&family=Inria+Serif&display=swap');
+
+.inria-serif {
+    font-family: "Inria Serif", serif;
+}
+
+.inria-sans {
+    font-family: "Inria Sans", sans-serif;
+}
+
+/* font end */
+
+/* Library css start */
+:root {
+    --fs-sm: 12px;
+    --fs-md: 16px;
+    --fs-lg: 24px;
+    --sidebar: 224px;
+    --dark: #262D34;
+    --light: #F9F7F7;
+    --primary: #ED1C24;
+    --secondary: #ED631C;
+    --tertery: #ED3F1C;
+    --transparent-bg: #ED631C1F;
+    --shadow: 0px 4px 14px #ED631C1A;
+    --ff-inria-serif: "Inria Serif", serif;
+    --ff-inria-sans: "Inria Sans", sans-serif;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    transition: 500ms all ease;
+}
+
+body {
+    font-size: 16px;
+    color: #262D34;
+    scroll-behavior: smooth;
+    background-color: #F9F7F7;
+    font-family: "Inria Sans", sans-serif;
+}
+
+li {
+    list-style-type: none;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+a:hover {
+    color: inherit;
+}
+
+.card {
+    border: none;
+}
+
+.card-secondary {
+    background-color: var(--light);
+}
+
+.theme-alert {
+    color: #ED1C24;
+    text-align: center;
+    font-size: var(--fs-sm);
+    line-height: var(--fs-md);
+    background-color: #ED1C2429;
+}
+
+.theme-shadow {
+    border-radius: 8px;
+    background-color: #fff;
+    box-shadow: var(--shadow);
+}
+
+.layout-body {
+    padding-inline-start: var(--sidebar);
+}
+
+.page-content {
+    overflow: hidden;
+}
+
+table {
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+table tr {
+    font-size: var(--fs-sm);
+}
+/* Library css end */
+
+/* sidebar css start */
+aside {
+    z-index: 999;
+    height: 100vh;
+    position: fixed;
+    color: var(--light);
+    width: var(--sidebar);
+    transition: 500ms all ease;
+    background-color: var(--dark);
+}
+
+aside .sidebar img {
+    width: 36px;
+}
+
+aside .sidebar > div {
+    height: 100vh;
+}
+
+aside .sidebar .menu-list {
+    overflow-y: auto;
+    flex-grow: 1;
+} 
+
+aside .sidebar .menu-list::-webkit-scrollbar {
+    width: 4px;
+    background-color: transparent;
+}
+
+aside .sidebar .menu-list::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    width: 4px;
+    background-color: #ED1C24cc;
+}
+
+aside .sidebar .text-muted {
+    font-size: var(--fs-sm);
+}
+
+aside .sidebar ul li a {
+    width: 100%;
+    height: 100%;
+    display: block;
+    position: relative;
+    padding-block: 8px;
+    transition: 300ms all ease;
+}
+
+aside .sidebar ul li a:hover {
+    color: var(--primary);
+    transition: 500ms all ease;
+    border-left: 2px solid var(--primary);
+}
+
+aside .sidebar ul li a::after {
+    top: 0;
+    left: 0;
+    width: 0%;
+    bottom: 0;
+    content: "";
+    position: absolute;
+    background-color: #ed1c232e;
+    transition: 300ms all ease;
+}
+
+aside .sidebar ul li a:hover::after {
+    width: 100%;
+    transition: 300ms all ease;
+}
+
+body.side-hide {
+    --sidebar: 48px;
+    transition: 500ms all ease;
+}
+
+body.side-hide .sidebar :where(a, p) {
+    text-wrap: nowrap;
+}
+
+body.side-hide .btn {
+    padding: 8px;
+}
+
+body.side-hide .side-header img {
+    width: 100%;
+}
+
+body.side-hide .side-text {
+    visibility: hidden;
+}
+
+body.side-hide aside .sidebar .menu-list {
+    overflow-x: hidden;
+}
+/* sidebar css end */
+
+/* nav css start here */
+nav {
+    padding: 16px 24px;
+}
+
+nav .title {
+    color: var(--secondary);
+}
+
+nav i {
+    font-size: var(--fs-md);
+}
+
+.profile-box img {
+    width: 36px;
+    height: 36px;
+    object-fit: cover;
+    aspect-ratio: 1/1;
+    border-radius: 50%;
+    margin-inline-end: 8px;
+}
+/* nav css end here */
+
+/* dashboard page css start */
+.chart-filter button.btn {
+    color: #aaa;
+    border: 1px solid #E7E7E7;
+    transition: 300ms all ease;
+}
+
+.chart-filter button.btn:hover {
+    transition: 500ms all ease;
+    background-color: #e7e7e7;
+}
+
+.chart-filter button.btn.active {
+    color: var(--dark);
+    border: 1px solid #E7E7E7;
+    background-color: #E7E7E7;
+}
+
+.icon-box {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    border-radius: 4px;
+    place-content: center;
+    color: var(--secondary);
+    background-color: #ED631C1f;
+}
+/* dashboard page css end */
+
+/* discount page css start */
+.disc-modal-card {
+    color: var(--dark);
+    background-color: var(--light);
+}
+
+.disc-modal-card img {
+    width: 64px;
+    aspect-ratio: 1/1;
+    border-radius: 8px;
+    border: 1px solid #fff;
+    outline: 1px solid var(--tertery);
+}
+
+.disc-modal-card {
+    font-size: 12px;
+}
+/* discount page css end */
+
+@media (max-width: 1023px) {    
+    .layout-body {
+        padding-inline-start: 48px;
+    }
+}
