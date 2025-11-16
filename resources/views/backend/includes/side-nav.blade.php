@@ -34,7 +34,7 @@
         <p class="m-0 text-muted ps-3 pt-3 pb-2"><span class="side-text">Advance</span></p>
         <ul class="m-0 p-0">
           <li>
-            <a href="{{ url('/store-create') }}" class="ps-3">
+            <a href="{{ route('stores.index') }}" class="ps-3">
               <i class="ri-database-line"></i>
               <span class="side-text">Create Store</span>
             </a>

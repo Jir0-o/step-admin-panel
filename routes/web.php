@@ -13,6 +13,7 @@ use App\Http\Controllers\ProjectTitleController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\StoreController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkPlanController;
@@ -26,7 +27,6 @@ Route::get('/', function () {
 
 Route::view('/store',         'backend.admin.store')->name('store.index');
 Route::view('/discount',      'backend.admin.discount')->name('discount.index');
-Route::view('/store-create',  'backend.admin.store-create')->name('store.create');
 Route::view('/route',         'backend.admin.route')->name('route.index');
 Route::view('/user',          'backend.admin.user')->name('user.index');
 
@@ -43,6 +43,8 @@ Route::middleware([
     Route::resource('user', UserController::class);
     Route::resource('roles', RoleController::class);
     Route::resource('permission', PermissionController::class);
+
+    Route::resource('stores', StoreController::class);
 
     //Notification Route
     Route::get('/notifications/count', [NotificationController::class, 'notificationCount'])->name('notifications.count');
