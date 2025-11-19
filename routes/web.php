@@ -3,6 +3,7 @@
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\AsignTaskController;
+use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LoginDetailsController;
 use App\Http\Controllers\ManageWorkController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StoreController;
+use App\Http\Controllers\StoreProxyController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkPlanController;
@@ -30,6 +32,12 @@ Route::view('/discount',      'backend.admin.discount')->name('discount.index');
 Route::view('/route',         'backend.admin.route')->name('route.index');
 Route::view('/user',          'backend.admin.user')->name('user.index');
 
+Route::get('/login', [AuthenticatedSessionController::class, 'create'])->middleware('guest')->name('login');
+Route::post('/login', [AuthenticatedSessionController::class, 'store'])->middleware('guest');
+
+// Logout
+Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+
 
 
 
@@ -45,6 +53,8 @@ Route::middleware([
     Route::resource('permission', PermissionController::class);
 
     Route::resource('stores', StoreController::class);
+
+    Route::get('/stores/{store}/fetch-data', [StoreProxyController::class, 'fetchData'])->name('stores.fetch-data');
 
     //Notification Route
     Route::get('/notifications/count', [NotificationController::class, 'notificationCount'])->name('notifications.count');

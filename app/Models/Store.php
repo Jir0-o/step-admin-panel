@@ -10,41 +10,46 @@ class Store extends Model
     protected $table = 'stores';
 
     protected $fillable = [
-        'name', 'base_url', 'user_email', 'user_password'
+        'name',
+        'base_url',
+        'login_api_url',
+        'user_email',
+        'user_password'
     ];
 
-    // When setting password, encrypt it (so we can decrypt later)
+    /**
+     * Mutator – encrypt password on set
+     */
     public function setUserPasswordAttribute($value)
     {
+        // Empty → do not save anything
         if (is_null($value) || $value === '') {
             $this->attributes['user_password'] = null;
             return;
         }
-        // If value already appears encrypted (avoid double-encrypt) -- optional guard:
-        try {
-            // try decrypt; if success, assume already encrypted
-            Crypt::decryptString($value);
-            $this->attributes['user_password'] = $value;
-            return;
-        } catch (\Throwable $e) {
-            // not encrypted -> encrypt now
-        }
 
+        // Encrypt every new raw password consistently
         $this->attributes['user_password'] = Crypt::encryptString($value);
     }
 
-    // Convenience: returns decrypted password or null
+    /**
+     * Helper: Get decrypted password cleanly
+     */
     public function getDecryptedPassword(): ?string
     {
-        $v = $this->attributes['user_password'] ?? null;
-        if (!$v) return null;
-        try {
-            return Crypt::decryptString($v);
-        } catch (\Throwable $e) {
+        if (empty($this->attributes['user_password'])) {
             return null;
+        }
+
+        try {
+            return Crypt::decryptString($this->attributes['user_password']);
+        } catch (\Throwable $e) {
+            return null; // corrupted / invalid encryption
         }
     }
 
-    // Optionally hide the raw encrypted value from array/json forms
+    /**
+     * Hide encrypted password in JSON output
+     */
     protected $hidden = ['user_password'];
 }

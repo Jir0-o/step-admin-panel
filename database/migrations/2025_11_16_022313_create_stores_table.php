@@ -14,7 +14,7 @@ class CreateStoresTable extends Migration
             $table->string('base_url')->nullable();
             $table->string('user_email')->nullable();
             
-            $table->string('user_password')->nullable();
+            $table->text('user_password')->nullable();
             $table->timestamps();
         });
     }
