@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ActivityController;
+use App\Http\Controllers\Api\DiscountRequestController;
 use App\Http\Controllers\Api\SanctumAuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -23,7 +24,17 @@ Route::group(['prefix'=>'auth'], function(){
 
 Route::post('/activity', [ActivityController::class, 'store']);
 
+Route::post('/discount-requests', [DiscountRequestController::class,'store']); // called by POS
+Route::get('/discount-requests', [DiscountRequestController::class,'index']);   // admin list
+Route::get('/discount-requests/{discountRequest}', [DiscountRequestController::class,'show']);
+Route::get('/discount-requests/status/{tempCartId}', [DiscountRequestController::class,'statusByTempCart']);
+
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
+});
+
+Route::middleware('auth:sanctum')->group(function(){
+    Route::patch('/discount-requests/{discountRequest}/approve', [DiscountRequestController::class,'approve']);
+    Route::patch('/discount-requests/{discountRequest}/reject', [DiscountRequestController::class,'reject']);
 });

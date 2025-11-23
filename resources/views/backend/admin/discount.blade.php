@@ -44,7 +44,7 @@
                             </div>
                         </td>
                     </tr>
-                    <tr>
+                    <tr> 
                         <td class="text-center inria-serif">02</td>
                         <td class="text-center inria-serif">Store 1</td>
                         <td class="text-center inria-serif">Customer 2</td>
@@ -201,5 +201,120 @@
         </div>
     </div>
 </div>
-<!-- modal for discount details end -->
+
+<!-- jQuery required by your code -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+$(function(){
+
+  // Fetch requests and render table
+  function loadRequests(){
+    $.ajax({
+      url: '/api/discount-requests',
+      method: 'GET',
+      dataType: 'json'
+    }).done(function(res){
+      if (!res.ok) return;
+      const rows = res.data || [];
+      const $tbody = $('table.table tbody').empty();
+      rows.forEach(function(r, idx){
+        const itemsCount = Array.isArray(r.items) ? r.items.length : 0;
+        const totalItems = r.items?.reduce((s,i)=> s + (i.qty||0), 0) || 0;
+        const tr = $(`
+          <tr data-id="${r.id}">
+            <td class="text-center">${String(idx+1).padStart(2,'0')}</td>
+            <td class="text-center">${r.store_name || r.store_id}</td>
+            <td class="text-center">${r.requested_by_name || '-'}</td>
+            <td class="text-center">${totalItems}</td>
+            <td class="text-center">৳ ${Number(r.total_amount).toLocaleString('en-IN',{minimumFractionDigits:2})}</td>
+            <td class="text-center">৳ ${Number(r.requested_amount).toLocaleString('en-IN',{minimumFractionDigits:2})}</td>
+            <td class="text-center">
+              <div class="d-flex gap-2 align-items-center justify-content-center">
+                <button class="btn btn-sm btn-info view-btn" data-id="${r.id}">View</button>
+                <button class="btn btn-sm btn-success approve-btn" data-id="${r.id}">Approve</button>
+                <button class="btn btn-sm btn-danger reject-btn" data-id="${r.id}">Reject</button>
+              </div>
+            </td>
+          </tr>
+        `);
+        $tbody.append(tr);
+      });
+    }).fail(function(){ alert('Failed to load discount requests'); });
+  }
+
+  loadRequests();
+
+  // open modal with details
+  $(document).on('click', '.view-btn', function(){
+    const id = $(this).data('id');
+    $.get('/api/discount-requests/' + id).done(function(res){
+      if (!res.ok) return;
+      const r = res.data;
+      // populate modal fields (example)
+      $('#viewDiscountDetailsLabel').text(`Discount Details - Request #${r.id}`);
+      $('.modal-body .fw-semibold').first().text(r.requested_by_name || '-');
+      $('.modal-body input[type="text"]').val(Number(r.requested_amount).toFixed(2));
+      $('.modal-body .product-list').remove(); // remove previous if exist
+
+      const $listContainer = $('<div class="product-list"/>');
+      (r.items||[]).forEach(function(it){
+        const html = `<div class="mb-2"><strong>${it.product_name || ('ID:'+it.product_id)}</strong>
+          <div>Qty: ${it.qty} | Price: ৳ ${Number(it.price).toLocaleString('en-IN',{minimumFractionDigits:2})} | Discount: ৳ ${Number(it.discount).toLocaleString('en-IN',{minimumFractionDigits:2})}</div>
+        </div>`;
+        $listContainer.append(html);
+      });
+      $('.modal-body .card-body').first().after($listContainer);
+
+      // store id for modal confirm buttons
+      $('#viewDiscountDetails').data('request-id', r.id);
+      $('#viewDiscountDetails').modal('show');
+    });
+  });
+
+  // Approve
+  $(document).on('click', '.approve-btn', function(){
+    const id = $(this).data('id');
+    if (!confirm('Approve this discount?')) return;
+    $.ajax({
+      url: '/api/discount-requests/' + id + '/approve',
+      method: 'PATCH',
+      headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } // if using session auth
+    }).done(function(){ loadRequests(); alert('Approved'); });
+  });
+
+  // Reject
+  $(document).on('click', '.reject-btn', function(){
+    const id = $(this).data('id');
+    if (!confirm('Reject this discount?')) return;
+    $.ajax({
+      url: '/api/discount-requests/' + id + '/reject',
+      method: 'PATCH',
+      headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+    }).done(function(){ loadRequests(); alert('Rejected'); });
+  });
+
+  // modal approve / reject (in modal footer)
+  $('#viewDiscountDetails .btn-success').on('click', function(){
+    const id = $('#viewDiscountDetails').data('request-id');
+    $.ajax({
+      url: '/api/discount-requests/' + id + '/approve',
+      method: 'PATCH',
+      headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+    }).done(function(){ $('#viewDiscountDetails').modal('hide'); loadRequests(); });
+  });
+  $('#viewDiscountDetails .btn-danger').on('click', function(){
+    const id = $('#viewDiscountDetails').data('request-id');
+    $.ajax({
+      url: '/api/discount-requests/' + id + '/reject',
+      method: 'PATCH',
+      headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+    }).done(function(){ $('#viewDiscountDetails').modal('hide'); loadRequests(); });
+  });
+
+  // optional: refresh every 10s
+  setInterval(loadRequests, 10000);
+
+});
+</script>
+
 @endsection

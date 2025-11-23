@@ -35,58 +35,6 @@
     </div>
 </div>
 
-<!-- KPI row -->
-<div class="row m-0 mt-3">
-  <div class="col-md-3">
-    <div class="card theme-shadow">
-      <div class="card-body">
-        <p class="m-0 text-muted">Total Sales of 2025</p>
-        <h6 id="total-sales-year" class="m-0 fw-semibold">-</h6>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-3">
-    <div class="card theme-shadow">
-      <div class="card-body">
-        <p class="m-0 text-muted">Today Sales</p>
-        <h6 id="today-sales" class="m-0 fw-semibold">-</h6>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-3">
-    <div class="card theme-shadow">
-      <div class="card-body">
-        <p class="m-0 text-muted">Today’s Income</p>
-        <h6 id="today-income" class="m-0 fw-semibold">-</h6>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-3">
-    <div class="card theme-shadow">
-      <div class="card-body">
-        <p class="m-0 text-muted">Total Expenses</p>
-        <h6 id="total-expenses" class="m-0 fw-semibold">-</h6>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Yesterday / Last Year line -->
-<div class="row m-0 mt-2">
-  <div class="col-md-4">
-    <p class="small text-muted">Last Year Total Sales: <span id="last-year-sales">-</span></p>
-  </div>
-  <div class="col-md-4">
-    <p class="small text-muted">Yesterday Sales: <span id="yesterday-sales">-</span></p>
-  </div>
-  <div class="col-md-4">
-    <p class="small text-muted">Yesterday Income: <span id="yesterday-income">-</span></p>
-  </div>
-</div>
-
 <!-- Store Information -->
 <div class="p-4">
     <h5>Store Information</h5>
@@ -376,26 +324,6 @@ $(function(){
             $('#yesterday-income').text(aggYesterdayIncome ? formatTaka(aggYesterdayIncome) : '-');
             $('#yesterday-expenses').text(aggYesterdayExpenses ? formatTaka(aggYesterdayExpenses) : '-');
 
-            // aggregated summary card
-            const summaryHtml = `
-              <div id="store-aggregates-summary" class="card theme-shadow p-3 mt-3">
-                <h6 class="mb-2">Aggregated Remote Data</h6>
-                <div class="d-flex gap-3 align-items-center flex-wrap">
-                  <div><strong>Total Stores:</strong> ${stores.length}</div>
-                  <div><strong>Total Products:</strong> ${aggProducts}</div>
-                  <div><strong>Total Suppliers:</strong> ${aggSuppliers}</div>
-                  <div><strong>Sales (2025):</strong> ${formatTaka(aggSales2025)}</div>
-                  <div><strong>Today Sales:</strong> ${formatTaka(aggTodaySales)}</div>
-                  <div><strong>Today Income:</strong> ${formatTaka(aggTodayIncome)}</div>
-                  <div><strong>Yesterday Sales:</strong> ${formatTaka(aggYesterdaySales)}</div>
-                  <div><strong>Yesterday Income:</strong> ${formatTaka(aggYesterdayIncome)}</div>
-                  <div><strong>Yesterday Expenses:</strong> ${formatTaka(aggYesterdayExpenses)}</div>
-                  <div><strong>Total Expenses:</strong> ${formatTaka(aggTotalExpenses)}</div>
-                  <div><strong>Total Profit:</strong> ${formatTaka(aggTotalProfit)}</div>
-                </div>
-              </div>`;
-            $summaryContainer.html(summaryHtml);
-            log('All stores processed.');
           }
         });
 

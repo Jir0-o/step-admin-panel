@@ -457,29 +457,7 @@ $(document).ready(function () {
     $('#yesterday-income').text(aggYesterdayIncome ? formatTaka(aggYesterdayIncome) : '-');
     $('#yesterday-expenses').text(aggYesterdayExpenses ? formatTaka(aggYesterdayExpenses) : '-');
 
-    // aggregated summary card
-    $('#store-aggregates-summary').remove();
-    const summaryHtml = `
-      <div id="store-aggregates-summary" class="card theme-shadow p-3 mt-3">
-        <h6 class="mb-2">Aggregated Remote Data</h6>
-        <div class="d-flex gap-3 align-items-center flex-wrap">
-          <div><strong>Total Stores:</strong> ${storeResults.length}</div>
-          <div><strong>Total Products:</strong> ${aggProducts}</div>
-          <div><strong>Total Suppliers:</strong> ${aggSuppliers}</div>
-          <div><strong>Sales (2025):</strong> ${formatTaka(aggSales2025)}</div>
-          <div><strong>Today Sales:</strong> ${formatTaka(aggTodaySales)}</div>
-          <div><strong>Today Income:</strong> ${formatTaka(aggTodayIncome)}</div>
-          <div><strong>Yesterday Sales:</strong> ${formatTaka(aggYesterdaySales)}</div>
-          <div><strong>Yesterday Income:</strong> ${formatTaka(aggYesterdayIncome)}</div>
-          <div><strong>Yesterday Expenses:</strong> ${formatTaka(aggYesterdayExpenses)}</div>
-          <div><strong>Total Expenses:</strong> ${formatTaka(aggTotalExpenses)}</div>
-          <div><strong>Total Profit:</strong> ${formatTaka(aggTotalProfit)}</div>
-        </div>
-      </div>`;
-    $summaryContainer.prepend(summaryHtml);
 
-    log('All stores processed.');
-    // return storeResults for chart use
     return storeResults;
   }
 
