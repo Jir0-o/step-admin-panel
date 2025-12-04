@@ -24,10 +24,13 @@ Route::group(['prefix'=>'auth'], function(){
 
 Route::post('/activity', [ActivityController::class, 'store']);
 
-Route::post('/discount-requests', [DiscountRequestController::class,'store']); // called by POS
-Route::get('/discount-requests', [DiscountRequestController::class,'index']);   // admin list
-Route::get('/discount-requests/{discountRequest}', [DiscountRequestController::class,'show']);
+Route::get('/discount-requests', [DiscountRequestController::class, 'index']);
+Route::get('/discount-requests/{id}', [DiscountRequestController::class, 'show']);
+Route::patch('/discount-requests/{id}/approve', [DiscountRequestController::class, 'approve']);
+Route::patch('/discount-requests/{id}/reject', [DiscountRequestController::class, 'reject']);
+Route::post('/discount-requests', [DiscountRequestController::class,'store']);
 Route::get('/discount-requests/status/{tempCartId}', [DiscountRequestController::class,'statusByTempCart']);
+Route::post('/discount-requests/decision', [DiscountRequestController::class,'decision']);
 
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {

@@ -4,29 +4,33 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class CreateDiscountRequestsTable extends Migration
+return new class extends Migration
 {
-    public function up()
+    public function up(): void
     {
         Schema::create('discount_requests', function (Blueprint $table) {
-            $table->bigIncrements('id');
-            $table->string('pos_store_name')->nullable();      // optional human name
-            $table->unsignedInteger('pos_store_id')->nullable(); // store id from POS
-            $table->unsignedBigInteger('temp_cart_id')->nullable(); // pos temp_cart_id
-            $table->unsignedInteger('requested_by')->nullable(); // pos user id (salesman)
-            $table->decimal('requested_amount', 12, 2)->nullable();
-            $table->text('note')->nullable();
-            $table->string('pos_callback_url')->nullable(); // POS endpoint for callback
+            $table->id();
+            $table->string('temp_cart_id', 64)->nullable();
+            $table->string('store_login_id', 100)->nullable();
+            $table->string('store_name', 255)->nullable();
+            $table->string('salesman', 255)->nullable();
+            $table->string('customer_mobile', 50)->nullable();
+            $table->integer('sales_type')->nullable();
+            $table->longText('items_json')->nullable();
+            $table->decimal('subtotal', 12, 2)->nullable();
+            $table->decimal('total_vat', 12, 2)->nullable();
+            $table->decimal('total_payable', 12, 2)->nullable();
+            $table->decimal('discount_requested', 12, 2)->nullable();
+            $table->decimal('total_after_discount', 12, 2)->nullable();
+            $table->string('pos_callback_url', 255)->nullable();
             $table->enum('status', ['pending','approved','rejected'])->default('pending');
-            $table->unsignedInteger('reviewed_by')->nullable();
-            $table->timestamp('reviewed_at')->nullable();
+            $table->integer('admin_id')->nullable();
             $table->timestamps();
         });
     }
 
-    public function down()
+    public function down(): void
     {
         Schema::dropIfExists('discount_requests');
     }
-}
-
+};

@@ -81,238 +81,359 @@
                         class="ri-price-tag-3-line"></i> Discount Details</h1>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
+
             <div class="modal-body">
                 <div class="row m-0">
                     <div class="col-md-12">
-                        <h6 class="fw-semibold mb-3">Request From: Step Store 1</h6>
+                        <!-- request-from is populated by JS -->
+                        <h6 class="fw-semibold mb-3 request-from">Request From: Step Store 1</h6>
                     </div>
+
                     <div class="col-md-6">
                         <table class="mb-3">
                             <tr>
                                 <td>Customer Name</td>
                                 <td>: &nbsp; &nbsp; </td>
-                                <td class="fw-semibold">Customer 1</td>
+                                <!-- customer-name populated by JS -->
+                                <td class="fw-semibold customer-name">Customer 1</td>
                             </tr>
                             <tr>
                                 <td>Requested Amount</td>
                                 <td>: &nbsp; &nbsp; </td>
-                                <td class="fw-semibold py-2">500/=</td>
+                                <!-- requested-amount populated by JS -->
+                                <td class="fw-semibold py-2 requested-amount">500/=</td>
                             </tr>
                             <tr>
                                 <td>Requested By</td>
                                 <td>: &nbsp; &nbsp; </td>
-                                <td class="fw-semibold">MD Hridoy Sheikh</td>
+                                <!-- requested-by populated by JS -->
+                                <td class="fw-semibold requested-by">MD Hridoy Sheikh</td>
                             </tr>
                         </table>
                     </div>
+
                     <div class="col-md-6">
-                        <table class="mb-3">
+                        <table class="mb-3 w-100">
                             <tr>
                                 <td>Current Price</td>
                                 <td> : &nbsp; &nbsp; </td>
-                                <td class="fw-semibold text-end">3500/=</td>
+                                <!-- current-price populated by JS -->
+                                <td class="fw-semibold text-end current-price">3500/=</td>
                             </tr>
                             <tr>
                                 <td>Discount Price</td>
                                 <td> : &nbsp; &nbsp; </td>
                                 <td class="fw-semibold">
-                                    <input class="form-control text-end py-1" type="text" value="300">
+                                    <!-- discount-input used to live-edit and update new-price -->
+                                    <input disabled class="form-control text-end py-1 discount-input" type="text" value="300">
                                 </td>
                             </tr>
                             <tr>
                                 <td>New Price</td>
                                 <td> : &nbsp; &nbsp; </td>
-                                <td class="fw-semibold text-end">-</td>
+                                <!-- new-price populated by JS -->
+                                <td class="fw-semibold text-end new-price">-</td>
                             </tr>
                         </table>
                     </div>
+
+                    <!-- action buttons (modal footer also contains approve/reject) -->
                     <div class="col-md-6">
-                        <button class="btn btn-danger w-100 mb-3">Cancel</button>
+                        <button class="btn btn-danger w-100 mb-3 modal-reject">Cancel</button>
                     </div>
                     <div class="col-md-6">
-                        <button class="btn btn-secondary w-100 mb-3">Confirm</button>
+                        <button class="btn btn-secondary w-100 mb-3 modal-approve">Confirm</button>
                     </div>
+
                     <div class="col-md-12">
                         <div class="mb-3">
                             <div class="d-flex justify-content-between align-items-center">
                                 <h6 class="fw-semibold">Product List</h6>
                                 <p class="text-muted">
-                                    <span class="me-3">Total Product 2</span>
-                                    <span>Total Items 3</span>
+                                    <span class="me-3 total-products">Total Product 0</span>
+                                    <span class="total-items">Total Items 0</span>
                                 </p>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="card theme-shadow disc-modal-card">
-                            <div class="card-body">
-                                <div class="d-flex gap-3 align-items-center">
-                                    <div class="d-flex gap-2 align-items-center">
-                                        <img src="./assets/img/product-2.webp" alt="Product Image" loading="lazy">
-                                        <div class="product-info">
-                                            <h6 class="fw-semibold mb-0">Twinkler Boy's Canvas</h6>
-                                            <small class="text-muted">SKU: 41597A27</small>
-                                            <small class="text-muted">Variation: Black-38-Cotton</small>
-                                        </div>
-                                    </div>
-                                    <p class="qty-info mb-0">
-                                        <span class="d-block">
-                                            <b class="fs-5">300/</b>pc
-                                        </span>
-                                        <span class="d-block">
-                                            <strong>QTY: 1</strong>
-                                        </span>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+
+                    <!-- product list container: JS will inject product cards here -->
+                    <div class="col-12 product-list-container row">
+                        <!-- placeholder when no products: JS will replace -->
+                        <div class="col-12 text-muted no-products">No product details available.</div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="card theme-shadow disc-modal-card">
-                            <div class="card-body">
-                                <div class="d-flex gap-3 align-items-center">
-                                    <div class="d-flex gap-2 align-items-center">
-                                        <img src="./assets/img/product-1.jpg" alt="Product Image" loading="lazy">
-                                        <div class="product-info">
-                                            <h6 class="fw-semibold mb-0">Twinkler Boy's Canvas</h6>
-                                            <small class="text-muted">SKU: 41597A27</small>
-                                            <small class="text-muted">Variation: Black-38-Cotton</small>
-                                        </div>
-                                    </div>
-                                    <p class="qty-info mb-0">
-                                        <span class="d-block">
-                                            <b class="fs-5">300/</b>pc
-                                        </span>
-                                        <span class="d-block">
-                                            <strong>QTY: 1</strong>
-                                        </span>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+
                 </div>
             </div>
+
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-danger">Reject</button>
-                <button type="button" class="btn btn-success">Approve</button>
+                <!-- keep modal footer buttons but add classes the script expects -->
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger modal-reject">Reject</button>
+                <button type="button" class="btn btn-success modal-approve">Approve</button>
             </div>
         </div>
     </div>
 </div>
+<!-- modal end -->
+
 
 <!-- jQuery required by your code -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
 $(function(){
 
-  // Fetch requests and render table
+  const API_BASE = '/api/discount-requests';
+
+  function formatCurrency(n){
+    const v = Number(n || 0);
+    return '৳ ' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function toastSuccess(msg){
+    Swal.fire({ icon: 'success', title: msg, toast: true, position: 'top-end', timer: 2000, showConfirmButton: false });
+  }
+  function toastError(msg){
+    Swal.fire({ icon: 'error', title: msg, toast: true, position: 'top-end', timer: 3000, showConfirmButton: false });
+  }
+
+  function randomImg(){
+    const imgs = [
+      "/assets/img/product-1.jpg",
+      "/assets/img/product-2.webp",
+      "/assets/img/default.png"
+    ];
+    return imgs[Math.floor(Math.random() * imgs.length)];
+  }
+
+  // ----------------------------------------------------------
+  // LOAD ALL DISCOUNT REQUESTS
+  // ----------------------------------------------------------
   function loadRequests(){
     $.ajax({
-      url: '/api/discount-requests',
+      url: API_BASE,
       method: 'GET',
       dataType: 'json'
     }).done(function(res){
-      if (!res.ok) return;
+      if (!res || !res.ok) return;
+
       const rows = res.data || [];
-      const $tbody = $('table.table tbody').empty();
+      const $tbody = $("table.table tbody").empty();
+
       rows.forEach(function(r, idx){
-        const itemsCount = Array.isArray(r.items) ? r.items.length : 0;
-        const totalItems = r.items?.reduce((s,i)=> s + (i.qty||0), 0) || 0;
-        const tr = $(`
+
+        let items = r.items_json ?? r.items ?? [];
+        if (typeof items === "string") {
+          try { items = JSON.parse(items); } catch(e){ items = []; }
+        }
+
+        const totalQty = items.reduce((s,i)=> s + Number(i.quantity || i.qty || 0), 0);
+
+        const tr = `
           <tr data-id="${r.id}">
-            <td class="text-center">${String(idx+1).padStart(2,'0')}</td>
-            <td class="text-center">${r.store_name || r.store_id}</td>
-            <td class="text-center">${r.requested_by_name || '-'}</td>
-            <td class="text-center">${totalItems}</td>
-            <td class="text-center">৳ ${Number(r.total_amount).toLocaleString('en-IN',{minimumFractionDigits:2})}</td>
-            <td class="text-center">৳ ${Number(r.requested_amount).toLocaleString('en-IN',{minimumFractionDigits:2})}</td>
+            <td class="text-center">${String(idx+1).padStart(2,"0")}</td>
+            <td class="text-center">${r.store_name ?? r.store_login_id ?? "-"}</td>
+            <td class="text-center">${r.customer_mobile ?? "-"}</td>
+            <td class="text-center">${totalQty}</td>
+            <td class="text-center">${formatCurrency(r.total_payable)}</td>
+            <td class="text-center">${formatCurrency(r.discount_requested)}</td>
             <td class="text-center">
-              <div class="d-flex gap-2 align-items-center justify-content-center">
+              <div class="d-flex gap-2 justify-content-center">
                 <button class="btn btn-sm btn-info view-btn" data-id="${r.id}">View</button>
-                <button class="btn btn-sm btn-success approve-btn" data-id="${r.id}">Approve</button>
-                <button class="btn btn-sm btn-danger reject-btn" data-id="${r.id}">Reject</button>
+                    ${ r.status === "pending" 
+                        ? `
+                            <button class="btn btn-sm btn-success approve-btn" data-id="${r.id}">Approve</button>
+                            <button class="btn btn-sm btn-danger reject-btn" data-id="${r.id}">Reject</button>
+                        `
+                        : `
+                            <span class="badge bg-${r.status === 'approved' ? 'success' : 'danger'}">
+                                ${r.status}
+                            </span>
+                        `
+                    }
               </div>
             </td>
           </tr>
-        `);
+        `;
         $tbody.append(tr);
       });
-    }).fail(function(){ alert('Failed to load discount requests'); });
+
+    }).fail(function(xhr){
+      console.error("Failed to load requests", xhr.responseText);
+      toastError("Unable to load discount requests");
+    });
   }
 
   loadRequests();
-
-  // open modal with details
-  $(document).on('click', '.view-btn', function(){
-    const id = $(this).data('id');
-    $.get('/api/discount-requests/' + id).done(function(res){
-      if (!res.ok) return;
-      const r = res.data;
-      // populate modal fields (example)
-      $('#viewDiscountDetailsLabel').text(`Discount Details - Request #${r.id}`);
-      $('.modal-body .fw-semibold').first().text(r.requested_by_name || '-');
-      $('.modal-body input[type="text"]').val(Number(r.requested_amount).toFixed(2));
-      $('.modal-body .product-list').remove(); // remove previous if exist
-
-      const $listContainer = $('<div class="product-list"/>');
-      (r.items||[]).forEach(function(it){
-        const html = `<div class="mb-2"><strong>${it.product_name || ('ID:'+it.product_id)}</strong>
-          <div>Qty: ${it.qty} | Price: ৳ ${Number(it.price).toLocaleString('en-IN',{minimumFractionDigits:2})} | Discount: ৳ ${Number(it.discount).toLocaleString('en-IN',{minimumFractionDigits:2})}</div>
-        </div>`;
-        $listContainer.append(html);
-      });
-      $('.modal-body .card-body').first().after($listContainer);
-
-      // store id for modal confirm buttons
-      $('#viewDiscountDetails').data('request-id', r.id);
-      $('#viewDiscountDetails').modal('show');
-    });
-  });
-
-  // Approve
-  $(document).on('click', '.approve-btn', function(){
-    const id = $(this).data('id');
-    if (!confirm('Approve this discount?')) return;
-    $.ajax({
-      url: '/api/discount-requests/' + id + '/approve',
-      method: 'PATCH',
-      headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } // if using session auth
-    }).done(function(){ loadRequests(); alert('Approved'); });
-  });
-
-  // Reject
-  $(document).on('click', '.reject-btn', function(){
-    const id = $(this).data('id');
-    if (!confirm('Reject this discount?')) return;
-    $.ajax({
-      url: '/api/discount-requests/' + id + '/reject',
-      method: 'PATCH',
-      headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
-    }).done(function(){ loadRequests(); alert('Rejected'); });
-  });
-
-  // modal approve / reject (in modal footer)
-  $('#viewDiscountDetails .btn-success').on('click', function(){
-    const id = $('#viewDiscountDetails').data('request-id');
-    $.ajax({
-      url: '/api/discount-requests/' + id + '/approve',
-      method: 'PATCH',
-      headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
-    }).done(function(){ $('#viewDiscountDetails').modal('hide'); loadRequests(); });
-  });
-  $('#viewDiscountDetails .btn-danger').on('click', function(){
-    const id = $('#viewDiscountDetails').data('request-id');
-    $.ajax({
-      url: '/api/discount-requests/' + id + '/reject',
-      method: 'PATCH',
-      headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
-    }).done(function(){ $('#viewDiscountDetails').modal('hide'); loadRequests(); });
-  });
-
-  // optional: refresh every 10s
   setInterval(loadRequests, 10000);
+
+
+  // ----------------------------------------------------------
+  // RENDER PRODUCT LIST INTO MODAL
+  // ----------------------------------------------------------
+  function renderProductList(selector, items){
+    const $c = $(selector).empty();
+
+    if (!Array.isArray(items) || items.length === 0){
+      $c.append('<p class="text-muted">No product details available.</p>');
+      return;
+    }
+
+    items.forEach(function(it){
+
+      const img = it.image_path || it.product_image || randomImg();
+
+      const name = it.product_name ?? it.product_material_name ?? `Product`;
+      const qty = it.quantity ?? it.qty ?? 0;
+      const price = it.unit_price ?? it.sales_price ?? it.price ?? 0;
+      const discount = it.total_discount ?? it.discount ?? 0;
+      const variation = `${it.color_name ?? it.colors_name ?? ''} ${it.size_name ?? ''}`.trim();
+      const sku = it.sku_no ?? "-";
+
+      const card = `
+        <div class="col-md-6 mb-3">
+          <div class="card theme-shadow disc-modal-card">
+            <div class="card-body d-flex gap-3 align-items-center">
+              <div class="d-flex gap-2 align-items-center">
+                <img src="${img}" alt="Product Image" style="width:72px;height:72px;object-fit:cover;border-radius:6px">
+                <div class="product-info">
+                  <h6 class="fw-semibold mb-0">${name}</h6>
+                  <small class="text-muted">SKU: ${sku}</small><br>
+                  <small class="text-muted">Variation: ${variation || "-"}</small>
+                </div>
+              </div>
+              <div style="margin-left:auto;text-align:right;">
+                <p class="qty-info mb-0">
+                  <span class="d-block"><b class="fs-5">${formatCurrency(price)}</b>/pc</span>
+                  <span class="d-block"><strong>QTY: ${qty}</strong></span>
+                  <span class="d-block text-muted">Discount: ${formatCurrency(discount)}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      $c.append(card);
+    });
+  }
+
+
+  // ----------------------------------------------------------
+  // OPEN MODAL WITH DETAILS
+  // ----------------------------------------------------------
+    $(document).on("click",".view-btn", function(){
+  const id = $(this).data("id");
+
+  $.get(API_BASE + "/" + id).done(function(res){
+    console.log("Detail response:", res);
+    if (!res.ok) { toastError("Failed to load details"); return; }
+
+    const r = res.data;
+
+    let items = r.items_json ?? r.items ?? [];
+    if (typeof items === "string") {
+      try { items = JSON.parse(items); } catch(e){ items = []; }
+    }
+    if (!Array.isArray(items)) items = [];
+
+    // Fill modal text fields
+    $(".request-from").text("Request From: " + (r.store_name ?? "-"));
+    $(".customer-name").text(r.customer_mobile ?? "-");
+    $(".requested-amount").text(formatCurrency(r.discount_requested));
+    $(".requested-by").text(r.salesman ?? "-");
+
+    const curr = Number(r.total_payable || 0);
+    $(".current-price").text(formatCurrency(curr));
+    $(".discount-input").val(Number(r.discount_requested || 0).toFixed(2));
+    $(".new-price").text(formatCurrency(curr - Number(r.discount_requested || 0)));
+
+    // Render item cards
+    renderProductList(".product-list-container", items);
+
+    // --- NEW: update total product / total items ---
+    const totalProducts = items.length;
+    const totalItems = items.reduce((s, it) => s + Number(it.quantity ?? it.qty ?? 0), 0);
+    $(".total-products").text("Total Product " + totalProducts);
+    $(".total-items").text("Total Items " + totalItems);
+
+    // hide placeholder if items present, show otherwise
+    if (totalProducts > 0) {
+      $(".product-list-container .no-products").remove(); // remove placeholder (if present)
+    } else {
+      if ($(".product-list-container .no-products").length === 0) {
+        $(".product-list-container").append('<div class="col-12 text-muted no-products">No product details available.</div>');
+      }
+    }
+    // --------------------------------------------------
+
+    $("#viewDiscountDetails").data("request-id", r.id).modal("show");
+
+    if (r.status !== "pending") {
+      $(".modal-approve").prop("disabled", true);
+      $(".modal-reject").prop("disabled", true);
+    } else {
+      $(".modal-approve").prop("disabled", false);
+      $(".modal-reject").prop("disabled", false);
+    }
+
+  }).fail(function(){
+    toastError("Error loading details");
+  });
+});
+
+
+
+  // live updating new price
+  $(document).on("input",".discount-input", function(){
+    const discount = parseFloat($(this).val() || 0);
+    const currentPrice = parseFloat($(".current-price").text().replace(/[^\d.-]/g,"") || 0);
+    $(".new-price").text(formatCurrency(Math.max(currentPrice - discount, 0)));
+  });
+
+
+  // ----------------------------------------------------------
+  // APPROVE / REJECT LOGIC
+  // ----------------------------------------------------------
+  function performDecision(id, action){
+
+    Swal.fire({
+      title: action === "approve" ? "Approve discount?" : "Reject discount?",
+      text: action === "approve" ? "This will notify POS and apply discount." : "This will reject and notify POS.",
+      icon: action === "approve" ? "question" : "warning",
+      showCancelButton: true,
+      confirmButtonText: action === "approve" ? "Approve" : "Reject"
+    }).then((result)=>{
+      if (!result.isConfirmed) return;
+
+      $.ajax({
+        url: `${API_BASE}/${id}/${action}`,
+        method: "PATCH",
+        headers: { "X-CSRF-TOKEN": "{{ csrf_token() }}" }
+      }).done(function(){
+        toastSuccess(action === "approve" ? "Approved" : "Rejected");
+        $("#viewDiscountDetails").modal("hide");
+        loadRequests();
+      }).fail(function(){
+        toastError("Action failed");
+      });
+    });
+  }
+
+  $(document).on("click",".approve-btn", function(){
+    performDecision($(this).data("id"), "approve");
+  });
+
+  $(document).on("click",".reject-btn", function(){
+    performDecision($(this).data("id"), "reject");
+  });
+
+  $(document).on("click",".modal-approve", function(){
+    performDecision($("#viewDiscountDetails").data("request-id"), "approve");
+  });
+
+  $(document).on("click",".modal-reject", function(){
+    performDecision($("#viewDiscountDetails").data("request-id"), "reject");
+  });
 
 });
 </script>

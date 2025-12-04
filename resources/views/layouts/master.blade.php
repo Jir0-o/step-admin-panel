@@ -12,6 +12,9 @@
   <link rel="stylesheet" href="{{ asset('assets/font/RemixIcon_v4.7.0/remixicon.css') }}" />
   <link rel="stylesheet" href="{{ asset('assets/css/style.css') }}" />
 
+  <!-- SweetAlert2 CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+
   {{-- jQuery (your template expects it early) --}}
   <script src="{{ asset('assets/js/jquery-3.7.1.min.js') }}"></script>
 
@@ -40,6 +43,8 @@
   <script src="{{ asset('assets/js/index.js') }}"></script>
   <script src="{{ asset('assets/aos-master/dist/aos.js') }}"></script>
   <script src="{{ asset('assets/js/bootstrap-5.3.bundle.min.js') }}"></script>
+  <!-- SweetAlert2 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
   <script> if (window.AOS) AOS.init(); </script>
 
 </body>
