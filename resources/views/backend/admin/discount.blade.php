@@ -201,7 +201,6 @@ $(function(){
     const imgs = [
       "/assets/img/product-1.jpg",
       "/assets/img/product-2.webp",
-      "/assets/img/default.png"
     ];
     return imgs[Math.floor(Math.random() * imgs.length)];
   }
@@ -281,14 +280,14 @@ $(function(){
 
     items.forEach(function(it){
 
-      const img = it.image_path || it.product_image || randomImg();
+      const img = it.image ?? it.product_image ?? it.product_images?.[0] ?? randomImg();
 
       const name = it.product_name ?? it.product_material_name ?? `Product`;
       const qty = it.quantity ?? it.qty ?? 0;
       const price = it.unit_price ?? it.sales_price ?? it.price ?? 0;
       const discount = it.total_discount ?? it.discount ?? 0;
       const variation = `${it.color_name ?? it.colors_name ?? ''} ${it.size_name ?? ''}`.trim();
-      const sku = it.sku_no ?? "-";
+      const sku = it.barcode ?? "-";
 
       const card = `
         <div class="col-md-6 mb-3">
@@ -298,8 +297,7 @@ $(function(){
                 <img src="${img}" alt="Product Image" style="width:72px;height:72px;object-fit:cover;border-radius:6px">
                 <div class="product-info">
                   <h6 class="fw-semibold mb-0">${name}</h6>
-                  <small class="text-muted">SKU: ${sku}</small><br>
-                  <small class="text-muted">Variation: ${variation || "-"}</small>
+                  <small class="text-muted">Article: ${sku}</small><br>
                 </div>
               </div>
               <div style="margin-left:auto;text-align:right;">
