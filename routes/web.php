@@ -16,6 +16,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StoreController;
 use App\Http\Controllers\StoreProxyController;
+use App\Http\Controllers\StoreSummaryProxyController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkPlanController;
@@ -55,6 +56,7 @@ Route::middleware([
     Route::resource('stores', StoreController::class);
 
     Route::get('/stores/{store}/fetch-data', [StoreProxyController::class, 'fetchData'])->name('stores.fetch-data');
+    Route::match(['get','post'], '/stores/{store}/fetch-summary', [StoreSummaryProxyController::class, 'fetchSummary'])->name('stores.fetch-summary');
 
     //Notification Route
     Route::get('/notifications/count', [NotificationController::class, 'notificationCount'])->name('notifications.count');

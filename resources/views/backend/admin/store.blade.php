@@ -67,123 +67,75 @@
 <script>
 $(function(){
 
-  // -----------------------
-  // Config: remote tables to ask each store for
-  // -----------------------
-  const tables = 'products,suppliers,cart_informtion,expense_details';
-
-  // append a small area for logs & aggregated summary
+  const TABLES = 'products,suppliers,cart_informtion,expense_details,banner_information';
   const $summaryContainer = $('#store-aggregates').empty();
 
-  // simple logger helper
-  function log(msg){
-    $summaryContainer.append($('<div class="small text-muted"></div>').text(msg));
-    console.log('[dashboard] ' + msg);
-  }
+  function log(msg){ $summaryContainer.append($('<div class="small text-muted"></div>').text(msg)); console.log('[dashboard] ' + msg); }
+  function toNumber(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
+  function formatTaka(val){ const n = toNumber(val); if (n === 0) return '-'; return '৳ ' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function normalizeDate(dstr){ if (!dstr) return null; const s = String(dstr).trim(); const iso = s.match(/\d{4}-\d{2}-\d{2}/); if (iso) return iso[0]; const dmy = s.match(/(\d{1,2})[^\d](\d{1,2})[^\d](\d{4})/); if (dmy) { const dd = String(dmy[1]).padStart(2,'0'); const mm = String(dmy[2]).padStart(2,'0'); const yy = dmy[3]; return `${yy}-${mm}-${dd}`;} const y = s.match(/(19|20)\d{2}/); return y ? y[0] : null; }
 
-  // defensive extractor: find array for tableName in many possible API shapes
   function extractArray(payload, tableName){
     if (!payload) return [];
-
-    // shape: { results: { table: { data: [...] } } }
-    if (payload.results && payload.results[tableName] && Array.isArray(payload.results[tableName].data)) {
-      return payload.results[tableName].data;
-    }
-
-    // shape: { table: { data: [...] } }
-    if (payload[tableName] && Array.isArray(payload[tableName].data)) {
-      return payload[tableName].data;
-    }
-
-    // shape: { data: { table: { data: [...] } } }
-    if (payload.data) return extractArray(payload.data, tableName);
-
-    // payload itself is an array -> single-table response
+    if (payload.results && payload.results[tableName] && Array.isArray(payload.results[tableName].data)) return payload.results[tableName].data;
+    if (payload[tableName] && Array.isArray(payload[tableName].data)) return payload[tableName].data;
+    if (payload.data && payload.data[tableName] && Array.isArray(payload.data[tableName].data)) return payload.data[tableName].data;
+    if (payload[tableName] && Array.isArray(payload[tableName])) return payload[tableName];
     if (Array.isArray(payload)) return payload;
-
     return [];
   }
 
-  // numeric helpers
-  function toNumber(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
-  function formatTaka(val){
-    const n = toNumber(val);
-    if (n === 0) return '-';
-    return '৳ ' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  // Try GET then fallback to POST when calling store proxy summary
+  function callStoreSummaryProxy(storeId, bodyOrQuery) {
+    const urlBase = '/stores/' + storeId + '/fetch-summary';
+    // Try GET (query params)
+    return new Promise(function(resolve) {
+      // Build query if params provided (bodyOrQuery is object)
+      const q = typeof bodyOrQuery === 'object' ? ('?'+ $.param(bodyOrQuery)) : '';
+      $.ajax({
+        url: urlBase + q,
+        method: 'GET',
+        dataType: 'json',
+        timeout: 15000,
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+      }).done(function(res){
+        resolve({ ok:true, method:'GET', res:res });
+      }).fail(function(xhr){
+        // if method not allowed or other server error, fall back to POST
+        log(`GET summary failed for store ${storeId} (${xhr.status}) — trying POST fallback`);
+        $.ajax({
+          url: urlBase,
+          method: 'POST',
+          contentType: 'application/json',
+          data: JSON.stringify(bodyOrQuery || { tables: TABLES }),
+          dataType: 'json',
+          timeout: 20000,
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+          }
+        }).done(function(res2){
+          resolve({ ok:true, method:'POST', res:res2 });
+        }).fail(function(xhr2){
+          resolve({ ok:false, status: xhr2.status || xhr.status, error: xhr2.responseText || xhr.statusText });
+        });
+      });
+    });
   }
 
-  // normalize date strings to YYYY-MM-DD (best-effort)
-  function normalizeDate(dstr){
-    if (!dstr) return null;
-    const s = String(dstr).trim();
-    const iso = s.match(/\d{4}-\d{2}-\d{2}/);
-    if (iso) return iso[0];
-    const dmy = s.match(/(\d{1,2})[^\d](\d{1,2})[^\d](\d{4})/);
-    if (dmy) {
-      const dd = String(dmy[1]).padStart(2,'0');
-      const mm = String(dmy[2]).padStart(2,'0');
-      const yy = dmy[3];
-      return `${yy}-${mm}-${dd}`;
-    }
-    const y = s.match(/(19|20)\d{2}/);
-    return y ? y[0] : null;
-  }
-
-  // pickive value extractors from cart rows (safe)
-  function cartSalesValue(cart){
-    if (!cart) return 0;
-    if (cart.final_total_amount != null) return toNumber(cart.final_total_amount);
-    if (cart.total_payable_amount != null) return toNumber(cart.total_payable_amount);
-    if (cart.total_cart_amount != null) return toNumber(cart.total_cart_amount);
-    if (cart.paid_amount != null) return toNumber(cart.paid_amount);
-    return 0;
-  }
-  // use paid_amount for income (fixed)
-  function cartPaidValue(cart){
-    if (!cart) return 0;
-    if (cart.paid_amount != null) return toNumber(cart.paid_amount);
-    if (cart.final_total_amount != null) return toNumber(cart.final_total_amount);
-    return 0;
-  }
-  function cartProfitValue(cart){
-    if (!cart) return 0;
-    if (cart.net_profit != null) return toNumber(cart.net_profit);
-    if (cart.gross_profit != null) return toNumber(cart.gross_profit);
-    return 0;
-  }
-  function expenseValue(row){
-    if (!row) return 0;
-    if (row.amount != null) return toNumber(row.amount);
-    return 0;
-  }
-
-  // -----------------------
-  // Main: fetch stores list then query each store via proxy
-  // -----------------------
+  // load stores and fetch summaries
   $.get("{{ route('stores.index') }}")
     .done(function(res){
-      if (!res || !res.ok){
-        log('Failed to load stores from mother app');
-        return;
-      }
-
+      if (!res || !res.ok){ log('Failed to load stores'); return; }
       const stores = res.data || [];
       $('#total-stores').text(stores.length);
-      log('Found ' + stores.length + ' stores. Fetching remote data...');
+      log('Found ' + stores.length + ' stores. Fetching summaries...');
 
-      if (stores.length === 0) return;
-
-      // aggregated counters across all stores
-      let aggProducts = 0;
-      let aggSuppliers = 0;
-      let aggSales2025 = 0;
-      let aggTodaySales = 0;
-      let aggTodayIncome = 0;
-      let aggYesterdaySales = 0;
-      let aggYesterdayIncome = 0;
-      let aggTotalExpenses = 0;
-      let aggYesterdayExpenses = 0;
-      let aggTotalProfit = 0;
+      // aggregates
+      let aggProducts = 0, aggSuppliers = 0, aggSales2025 = 0;
+      let aggTodaySales = 0, aggTodayIncome = 0, aggYesterdaySales = 0, aggYesterdayIncome = 0;
+      let aggTotalExpenses = 0, aggYesterdayExpenses = 0, aggTotalProfit = 0;
 
       const today = new Date();
       const todayYMD = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
@@ -191,157 +143,102 @@ $(function(){
       const yesterdayYMD = yesterday.getFullYear() + '-' + String(yesterday.getMonth()+1).padStart(2,'0') + '-' + String(yesterday.getDate()).padStart(2,'0');
 
       const $tbody = $('#stores-info-tbody').empty();
-      let completed = 0;
+      let done = 0;
 
       stores.forEach(function(st, idx){
         const storeId = st.id;
-
-        // placeholder row
-        const $row = $(`
-          <tr data-id="${storeId}">
+        const $row = $(`<tr data-id="${storeId}">
             <td class="text-center">${String(idx+1).padStart(2,'0')}</td>
             <td class="text-center">${$('<div>').text(st.name).html()}</td>
             <td class="text-center" data-store-sales>-</td>
             <td class="text-center" data-store-profit>-</td>
-            <td class="text-center">
-              <button class="btn btn-success px-2 py-1 btn-view" data-store-id="${storeId}">
-                <i class="ri-eye-fill"></i> View
-              </button>
-            </td>
-          </tr>
-        `);
+            <td class="text-center"><button class="btn btn-success px-2 py-1 btn-view" data-store-id="${storeId}"><i class="ri-eye-fill"></i> View</button></td>
+          </tr>`);
         $tbody.append($row);
 
-        // proxy URL - mother app must implement this route and use stored tokens
-        const url = '/stores/' + storeId + '/fetch-data?tables=' + encodeURIComponent(tables);
-
-        // call the proxy (GET)
-        $.ajax({
-          url: url,
-          method: 'GET',
-          dataType: 'json',
-          timeout: 20000,
-          headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-        }).done(function(r){
-          if (!(r && r.ok)){
-            log(`Store ${st.name} (${storeId}) returned error: ${r?.message || 'no-ok'}`);
-            return;
+        // call proxy: try GET then POST
+        const query = { tables: TABLES };
+        callStoreSummaryProxy(storeId, query).then(function(result){
+          if (!result.ok) {
+            log(`Store ${st.name} (${storeId}) summary fetch failed: ${result.status || 'unknown'}`);
+            done++; if (done === stores.length) finalize(); return;
           }
 
-          // payload normalization: some endpoints embed results under r.results or r.data
-          const payload = r.results ? r : (r.data ? r.data : r);
+          const r = result.res;
+          // proxy wrapper often returns { ok:true, data: {...} } or { ok:true, results: {...} }
+          const payload = r && r.data ? (r.data.results || r.data) : (r.results || r);
+          // banner name
+          let bannerName = st.banner_name || st.name || ('Store ' + storeId);
+          try {
+            const b = payload.banner_information;
+            if (b) {
+              if (b.banner && b.banner.banner_name) bannerName = b.banner.banner_name;
+              else if (Array.isArray(b.data) && b.data[0] && b.data[0].banner_name) bannerName = b.data[0].banner_name;
+              else if (b.banner_name) bannerName = b.banner_name;
+            }
+          } catch(e){}
 
-          // extract arrays
-          const products = extractArray(payload, 'products');
-          const suppliers = extractArray(payload, 'suppliers');
-          const carts = extractArray(payload, 'cart_informtion');
-          // expense_details or expenses may be present
-          const expenseDetails = extractArray(payload, 'expense_details').concat(extractArray(payload, 'expenses'));
+          // cart summary fields returned by controller
+          const cart = payload.cart_informtion || payload.cart_information || payload.cart || {};
+          const totalAmountYear = toNumber(cart.total_amount_year || cart.total_amount || 0);
+          const totalAmountToday = toNumber(cart.total_amount_today || 0);
+          const totalAmountYesterday = toNumber(cart.total_amount_yesterday || 0);
+          const totalProfit = toNumber(cart.total_profit || 0);
+          const totalCount = Number(cart.total_count || 0);
 
-          // counts
-          const pCount = products.length;
-          const sCount = suppliers.length;
-          aggProducts += pCount;
-          aggSuppliers += sCount;
+          // expenses
+          const exp = payload.expense_details || payload.expenses || {};
+          const totalExpenses = toNumber(exp.total_amount || 0);
 
-          // per-store aggregations
-          let storeSales2025 = 0;
-          let storeTodaySales = 0;
-          let storeTodayIncome = 0;
-          let storeYesterdaySales = 0;
-          let storeYesterdayIncome = 0;
-          let storeProfitTotal = 0;
-          let storeExpensesTotal = 0;
-          let storeYesterdayExpenses = 0;
+          // products & suppliers counts
+          const productsCount = payload.products ? Number(payload.products.total_count || 0) : 0;
+          const suppliersCount = payload.suppliers ? Number(payload.suppliers.total_count || 0) : 0;
 
-          // process carts
-          if (Array.isArray(carts)){
-            carts.forEach(function(cart){
-              const dnorm = normalizeDate(cart.cart_date || cart.date || cart.cartDate || '');
-              const sale = cartSalesValue(cart);
-              const paid = cartPaidValue(cart);       // income uses paid amount
-              const profit = cartProfitValue(cart);
+          // accumulate
+          aggProducts += productsCount;
+          aggSuppliers += suppliersCount;
+          aggSales2025 += totalAmountYear;
+          aggTodaySales += totalAmountToday;
+          aggTodayIncome += totalAmountToday; // paid_amount == income
+          aggYesterdaySales += totalAmountYesterday;
+          aggYesterdayIncome += totalAmountYesterday;
+          aggTotalExpenses += totalExpenses;
+          aggTotalProfit += totalProfit;
 
-              storeProfitTotal += profit;
+          // update row
+          $row.find('td').eq(1).text(bannerName);
+          $row.find('[data-store-sales]').text(totalAmountYear ? formatTaka(totalAmountYear) : '-');
+          $row.find('[data-store-profit]').text(totalProfit ? formatTaka(totalProfit) : '-');
 
-              // 2025 sales
-              if (dnorm && dnorm.startsWith('2025')) storeSales2025 += sale;
-              else if (!dnorm && String(cart.cart_date || '').includes('2025')) storeSales2025 += sale;
+          log(`Store ${bannerName} OK — products:${productsCount}, suppliers:${suppliersCount}, sales2025:${formatTaka(totalAmountYear)}`);
 
-              // today
-              if (dnorm === todayYMD) {
-                storeTodaySales += sale;
-                storeTodayIncome += paid;
-              }
-              // yesterday
-              if (dnorm === yesterdayYMD) {
-                storeYesterdaySales += sale;
-                storeYesterdayIncome += paid;
-              }
-            });
-          }
-
-          // process expenses
-          if (Array.isArray(expenseDetails)){
-            expenseDetails.forEach(function(e){
-              const amt = expenseValue(e);
-              const dnorm = normalizeDate(e.date || e.created_at || e.createdAt || '');
-              storeExpensesTotal += amt;
-              if (dnorm === yesterdayYMD) storeYesterdayExpenses += amt;
-            });
-          }
-
-          // accumulate globals
-          aggSales2025 += storeSales2025;
-          aggTodaySales += storeTodaySales;
-          aggTodayIncome += storeTodayIncome;
-          aggYesterdaySales += storeYesterdaySales;
-          aggYesterdayIncome += storeYesterdayIncome;
-          aggTotalExpenses += storeExpensesTotal;
-          aggYesterdayExpenses += storeYesterdayExpenses;
-          aggTotalProfit += storeProfitTotal;
-
-          // update per-store UI
-          $row.find('[data-store-sales]').text(storeSales2025 ? formatTaka(storeSales2025) : '-');
-          $row.find('[data-store-profit]').text(storeProfitTotal ? formatTaka(storeProfitTotal) : '-');
-
-          log(`Store ${st.name} OK — products:${pCount}, suppliers:${sCount}, sales2025:${formatTaka(storeSales2025)}, today:${formatTaka(storeTodaySales)}, profit:${formatTaka(storeProfitTotal)}`);
-
-        }).fail(function(xhr, statusText){
-          log(`Store ${st.name} (${storeId}) fetch error: ${xhr.status || '??'} ${xhr.statusText || statusText}`);
-          console.error('fetch-data error', xhr && xhr.responseText);
-        }).always(function(){
-          completed++;
-          // when all stores processed update dashboard widgets
-          if (completed === stores.length){
-            $('#total-products').text(aggProducts || '-');
-            $('#total-sales-year').text(aggSales2025 ? formatTaka(aggSales2025) : '-');
-            $('#today-sales').text(aggTodaySales ? formatTaka(aggTodaySales) : '-');
-            $('#today-income').text(aggTodayIncome ? formatTaka(aggTodayIncome) : '-');
-            $('#total-expenses').text(aggTotalExpenses ? formatTaka(aggTotalExpenses) : '-');
-
-            $('#yesterday-sales').text(aggYesterdaySales ? formatTaka(aggYesterdaySales) : '-');
-            $('#yesterday-income').text(aggYesterdayIncome ? formatTaka(aggYesterdayIncome) : '-');
-            $('#yesterday-expenses').text(aggYesterdayExpenses ? formatTaka(aggYesterdayExpenses) : '-');
-
-          }
+          done++;
+          if (done === stores.length) finalize();
         });
+      });
 
-      }); // end stores.forEach
+      function finalize(){
+        $('#total-products').text(aggProducts || '-');
+        $('#total-sales-year').text(aggSales2025 ? formatTaka(aggSales2025) : '-');
+        $('#today-sales').text(aggTodaySales ? formatTaka(aggTodaySales) : '-');
+        $('#today-income').text(aggTodayIncome ? formatTaka(aggTodayIncome) : '-');
+        $('#total-expenses').text(aggTotalExpenses ? formatTaka(aggTotalExpenses) : '-');
+
+        $('#yesterday-sales').text(aggYesterdaySales ? formatTaka(aggYesterdaySales) : '-');
+        $('#yesterday-income').text(aggYesterdayIncome ? formatTaka(aggYesterdayIncome) : '-');
+        $('#yesterday-expenses').text(aggYesterdayExpenses ? formatTaka(aggYesterdayExpenses) : '-');
+      }
     })
     .fail(function(){
       log('Failed to load stores from mother app (network).');
     });
 
-  // click handler for per-store "View" button (example: open remote store backoffice)
-  $(document).on('click', '.btn-view', function(){
-    const storeId = $(this).data('store-id');
-    // implement as you like, e.g. open store base_url or show detail modal
-    alert('View details for store ' + storeId);
-  });
+  // view button handler
+  $(document).on('click', '.btn-view', function(){ alert('View details for store ' + $(this).data('store-id')); });
 
 });
 </script>
+
 
 @endsection
 

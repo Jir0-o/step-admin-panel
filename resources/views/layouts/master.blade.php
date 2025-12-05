@@ -21,6 +21,7 @@
   @stack('page-styles')
 </head>
 <body class="@yield('body-class')">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   {{-- Sidebar --}}
   @include('backend.includes.side-nav')
 

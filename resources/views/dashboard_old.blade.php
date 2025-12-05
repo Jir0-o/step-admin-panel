@@ -168,9 +168,9 @@ $(document).ready(function () {
   // -----------------------
   // Configuration
   // -----------------------
-  const TABLES_SUMMARY = 'products,suppliers,cart_informtion,expense_details,banner_information';
+  const TABLES = 'products,suppliers,cart_informtion,expense_details,banner_information';
   const CHART_CDN = 'https://cdn.jsdelivr.net/npm/chart.js';
-  const NO_LIMIT = true; // not used for summary but kept for parity
+  const NO_LIMIT = true; // set true to not pass limit param, false to pass numeric limit
   const REQUEST_LIMIT = '';
 
   // UI containers
@@ -193,12 +193,76 @@ $(document).ready(function () {
   function formatTaka(v) {
     const n = toNumber(v);
     if (n === 0) return '-';
+    // two decimals, comma group using en-IN for lakh formatting
     return '৳ ' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
 
-  function isoDate(d) {
-    if (!(d instanceof Date)) return null;
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  // Best-effort date -> YYYY-MM-DD
+  function normalizeDate(s) {
+    if (!s) return null;
+    const str = String(s).trim();
+    const iso = str.match(/\d{4}-\d{2}-\d{2}/);
+    if (iso) return iso[0];
+    const dmy = str.match(/(\d{1,2})[^\d](\d{1,2})[^\d](\d{4})/);
+    if (dmy) {
+      const dd = String(dmy[1]).padStart(2, '0');
+      const mm = String(dmy[2]).padStart(2, '0');
+      const yy = dmy[3];
+      return `${yy}-${mm}-${dd}`;
+    }
+    const y = str.match(/(19|20)\d{2}/);
+    return y ? y[0] : null;
+  }
+
+  // Extract an array for a table name from various payload shapes
+  function extractArray(payload, tableName) {
+    if (!payload) return [];
+    // shape: { results: { tablename: { data: [...] } } }
+    if (payload.results && payload.results[tableName] && Array.isArray(payload.results[tableName].data)) {
+      return payload.results[tableName].data;
+    }
+    // shape: { tablename: { data: [...] } }
+    if (payload[tableName] && Array.isArray(payload[tableName].data)) {
+      return payload[tableName].data;
+    }
+    // shape: { tablename: [...] }
+    if (payload[tableName] && Array.isArray(payload[tableName])) {
+      return payload[tableName];
+    }
+    // top-level array
+    if (Array.isArray(payload)) return payload;
+    // nested under data
+    if (payload.data) return extractArray(payload.data, tableName);
+    return [];
+  }
+
+  // Pick numeric values from cart rows (sensible fallbacks)
+  function cartSalesValue(cart) {
+    if (!cart) return 0;
+    if (cart.final_total_amount != null) return toNumber(cart.final_total_amount);
+    if (cart.total_payable_amount != null) return toNumber(cart.total_payable_amount);
+    if (cart.total_cart_amount != null) return toNumber(cart.total_cart_amount);
+    if (cart.paid_amount != null) return toNumber(cart.paid_amount);
+    return 0;
+  }
+  function cartPaidValue(cart) {
+    if (!cart) return 0;
+    if (cart.paid_amount != null) return toNumber(cart.paid_amount);
+    if (cart.final_total_amount != null) return toNumber(cart.final_total_amount);
+    return 0;
+  }
+  function cartProfitValue(cart) {
+    if (!cart) return 0;
+    if (cart.net_profit != null) return toNumber(cart.net_profit);
+    if (cart.gross_profit != null) return toNumber(cart.gross_profit);
+    return 0;
+  }
+
+  // Expense amount extractor
+  function expenseValue(row) {
+    if (!row) return 0;
+    if (row.amount != null) return toNumber(row.amount);
+    return 0;
   }
 
   // -----------------------
@@ -247,6 +311,7 @@ $(document).ready(function () {
 
   // small concurrency runner (p-limit style)
   function runWithLimit(tasks, limit = 6) {
+    // tasks: array of functions that return promises
     let i = 0;
     const results = new Array(tasks.length);
     const active = [];
@@ -256,11 +321,13 @@ $(document).ready(function () {
       const idx = i++;
       const p = Promise.resolve().then(() => tasks[idx]()).then(res => { results[idx] = res; });
       active.push(p);
+
       const cleanup = () => {
         const pos = active.indexOf(p);
         if (pos !== -1) active.splice(pos, 1);
       };
       p.then(cleanup, cleanup);
+
       let slot = Promise.resolve();
       if (active.length >= limit) slot = Promise.race(active);
       return slot.then(next);
@@ -270,164 +337,166 @@ $(document).ready(function () {
   }
 
   // -----------------------
-  // Date helpers for ranges
+  // Fetch all stores and then fetch remote data per store
   // -----------------------
-  function rangeToStartDate(range) {
-    const now = new Date();
-    const d = new Date(now);
-    if (range === '7d') d.setDate(now.getDate() - 6);
-    else if (range === '1m') d.setMonth(now.getMonth() - 1);
-    else if (range === '6m') d.setMonth(now.getMonth() - 6);
-    else if (range === '1y') d.setFullYear(now.getFullYear() - 1);
-    else d.setMonth(now.getMonth() - 6);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }
+  function fetchAllStoresData() {
+    return getStoresList().then(function (stores) {
+      if (!stores || stores.length === 0) {
+        log('No stores found or failed to fetch stores');
+        return Promise.resolve([]);
+      }
+      log('Found ' + stores.length + ' stores. Fetching remote data...');
 
-  // -----------------------
-  // New: fetch aggregated summary for all stores (fast)
-  // Uses store proxy: GET /stores/{id}/fetch-summary?tables=...
-  // -----------------------
-function fetchAllStoresSummary() {
-  return getStoresList().then(function (stores) {
-    if (!stores || stores.length === 0) {
-      log('No stores found or failed to fetch stores');
-      return Promise.resolve([]);
-    }
-    log('Found ' + stores.length + ' stores. Fetching summaries...');
+      const YEAR = new Date().getFullYear();
 
-    // tasks: each calls /stores/{id}/fetch-summary?tables=...
-    const tasks = stores.map(function (st) {
-      return function () {
-        const url = '/stores/' + st.id + '/fetch-summary?tables=' + encodeURIComponent('products,suppliers,cart_informtion,expense_details,banner_information');
-        return $.ajax({ url: url, method: 'GET', dataType: 'json', timeout: 15000 })
-          .then(function (r) {
-            console.log('Summary for store ' + st.id, r);
-            // 'r' is proxy wrapper; actual POS payload is usually in r.data or r.results
-            const payload = r && r.data ? r.data : (r || {});
-            const results = payload.results || payload;
+      // create an array of promise-returning functions for concurrency control
+      const tasks = stores.map(function (st) {
+        return function () {
+          // proxy url: omit limit param if NO_LIMIT true
+          const base = '/stores/' + st.id + '/fetch-data?tables=' + encodeURIComponent(TABLES);
+          const url = NO_LIMIT ? base : base + '&limit=' + encodeURIComponent(REQUEST_LIMIT);
 
-            // banner name: try multiple places
-            let bannerName = st.banner_name || st.name || ('Store ' + st.id);
-            if (results && results.banner_information && results.banner_information.banner) {
-              bannerName = results.banner_information.banner.banner_name || bannerName;
-            } else if (results && results.banner_information && results.banner_information.total_count && payload.banner_information && payload.banner_information.data && payload.banner_information.data.length) {
-              // fallback: if banner returned in data array
-              const b = payload.banner_information.data[0];
-              if (b && b.banner_name) bannerName = b.banner_name;
+          return $.ajax({
+            url: url,
+            method: 'GET',
+            dataType: 'json',
+            timeout: 25000,
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+          }).then(function (r) {
+            // normalize payload shape
+            // console.log('Store', r);
+            const payload = r.results ? r : (r.data ? r.data : r);
+
+            // extract arrays
+            const products = extractArray(payload, 'products');
+            const suppliers = extractArray(payload, 'suppliers');
+            let carts = extractArray(payload, 'cart_informtion'); // may contain non-objects
+            const expenseDetails = extractArray(payload, 'expense_details');
+            const expenses = extractArray(payload, 'expenses');
+            const banners = extractArray(payload, 'banner_information');
+
+            // determine banner_name (priority: banner record -> store.banner_name -> store.name -> fallback)
+            const banner_name = (Array.isArray(banners) && banners.length > 0 && banners[0] && banners[0].banner_name)
+              ? banners[0].banner_name
+              : (st.banner_name || st.name || `Store ${st.id}`);
+
+            // ensure arrays and filter out non-object rows
+            const storeProducts = Array.isArray(products) ? products.length : 0;
+            const storeSuppliers = Array.isArray(suppliers) ? suppliers.length : 0;
+            if (Array.isArray(carts)) {
+              carts = carts.filter(x => x && typeof x === 'object');
+            } else {
+              carts = [];
             }
 
-            // cart sums
-            const cart = results && results.cart_informtion ? results.cart_informtion : (payload.cart_informtion || {});
-            const totalSales = toNumber(cart.total_amount || cart.total_amount_year || 0);
-            const totalSalesYear = toNumber(cart.total_amount_year || 0);
-            const todaySales = toNumber(cart.total_amount_today || 0);
-            const yesterdaySales = toNumber(cart.total_amount_yesterday || 0);
-            const totalProfit = toNumber(cart.total_profit || 0);
-            const totalCartCount = Number(cart.total_count || 0);
+            // date helpers
+            const today = new Date();
+            const todayYMD = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+            const yesterday = new Date(today);
+            yesterday.setDate(today.getDate() - 1);
+            const yesterdayYMD = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
 
-            // expenses
-            const exp = results && results.expense_details ? results.expense_details : (payload.expense_details || {});
-            const totalExpenses = toNumber(exp.total_amount || 0);
+            let storeSalesThisYear = 0;
+            let storeTodaySales = 0;
+            let storeTodayIncome = 0;
+            let storeYesterdaySales = 0;
+            let storeYesterdayIncome = 0;
+            let storeTotalProfit = 0;
+            let storeTotalExpenses = 0;
+            let storeYesterdayExpenses = 0;
 
-            // products / suppliers counts
-            const productsCount = results && results.products ? Number(results.products.total_count || 0) : 0;
-            const suppliersCount = results && results.suppliers ? Number(results.suppliers.total_count || 0) : 0;
+            if (Array.isArray(carts)) {
+              carts.forEach(function (cart) {
+                const d = normalizeDate(cart.cart_date || cart.date || cart.cartDate || '');
+                const sale = cartSalesValue(cart);
+                // const paid = cartProfitValue(cart);
+                const paid = cartPaidValue(cart); // income should be paid amount
+                const profit = cartProfitValue(cart);
 
+                storeTotalProfit += profit;
+
+                // sales in current year
+                if (d && d.startsWith(String(YEAR))) {
+                  storeSalesThisYear += sale;
+                } else if (!d && String(cart.cart_date || '').includes(String(YEAR))) {
+                  storeSalesThisYear += sale;
+                }
+
+                if (d === todayYMD) {
+                  storeTodaySales += sale;
+                  storeTodayIncome += paid;
+                }
+                if (d === yesterdayYMD) {
+                  storeYesterdaySales += sale;
+                  storeYesterdayIncome += paid;
+                }
+              });
+            }
+
+            // expenses arrays (merge both shapes)
+            const expensesArr = [];
+            if (Array.isArray(expenseDetails)) expensesArr.push(...expenseDetails);
+            if (Array.isArray(expenses)) expensesArr.push(...expenses);
+
+            if (Array.isArray(expensesArr)) {
+              expensesArr.forEach(function (e) {
+                const amt = expenseValue(e);
+                const d = normalizeDate(e.date || e.created_at || e.createdAt || '');
+                storeTotalExpenses += amt;
+                if (d === yesterdayYMD) storeYesterdayExpenses += amt;
+              });
+            }
+
+            // return structured result for this store
             return {
               ok: true,
               storeId: st.id,
-              storeName: bannerName,
-              productsCount: productsCount,
-              suppliersCount: suppliersCount,
-              salesThisYear: totalSalesYear || totalSales, // prefer year field
-              salesTotal: totalSales,
-              todaySales: todaySales,
-              yesterdaySales: yesterdaySales,
-              todayIncome: todaySales, // per your instruction paid_amount is income
-              yesterdayIncome: yesterdaySales,
-              totalExpenses: totalExpenses,
-              totalProfit: totalProfit,
-              totalCartCount: totalCartCount
+              storeName: banner_name,
+              productsCount: storeProducts,
+              suppliersCount: storeSuppliers,
+              salesThisYear: storeSalesThisYear,
+              todaySales: storeTodaySales,
+              todayIncome: storeTodayIncome,
+              yesterdaySales: storeYesterdaySales,
+              yesterdayIncome: storeYesterdayIncome,
+              totalExpenses: storeTotalExpenses,
+              yesterdayExpenses: storeYesterdayExpenses,
+              totalProfit: storeTotalProfit
             };
-          })
-          .catch(function (err) {
-            log('Store ' + (st.name || st.id) + ' summary fetch error: ' + (err && err.status ? err.status : 'network'));
+          }).catch(function (xhr) {
+            // always resolve with a safe object on error
+            const fallbackName = st.banner_name || st.name || `Store ${st.id}`;
+            log(`Store ${fallbackName} (${st.id}) fetch error: ${xhr && xhr.status ? xhr.status : 'network'}`);
             return {
               ok: false,
               storeId: st.id,
-              storeName: st.banner_name || st.name || ('Store ' + st.id),
+              storeName: fallbackName,
               productsCount: 0,
               suppliersCount: 0,
               salesThisYear: 0,
-              salesTotal: 0,
               todaySales: 0,
-              yesterdaySales: 0,
               todayIncome: 0,
+              yesterdaySales: 0,
               yesterdayIncome: 0,
               totalExpenses: 0,
-              totalProfit: 0,
-              totalCartCount: 0
+              yesterdayExpenses: 0,
+              totalProfit: 0
             };
           });
-      };
-    });
-
-    return runWithLimit(tasks, 6);
-  });
-}
-
-  // -----------------------
-  // Calculate per-store counts/amounts for a date range using summary (fast)
-  // We rely on summary endpoint supporting date_from/date_to filters (ISO Y-M-D)
-  // -----------------------
-  function calculateSalesPerStoreForRange(range) {
-    const start = rangeToStartDate(range);
-    const end = new Date(); end.setHours(23, 59, 59, 999);
-
-    const dateFrom = isoDate(start);
-    const dateTo = isoDate(end);
-
-    return getStoresList().then(function (stores) {
-      if (!stores || stores.length === 0) return [];
-
-      const tasks = stores.map(function (st) {
-        return function () {
-          const url = `/stores/${st.id}/fetch-summary?tables=cart_informtion&date_from=` + encodeURIComponent(dateFrom) + '&date_to=' + encodeURIComponent(dateTo);
-          return $.ajax({ url: url, method: 'GET', dataType: 'json', timeout: 15000 })
-            .then(function (r) {
-              const payload = r && r.data ? r.data : (r || {});
-              const results = payload.results || payload;
-              let amount = 0;
-              let count = 0;
-
-              if (results && results.cart_informtion) {
-                amount = toNumber(results.cart_informtion.total_amount || results.cart_informtion.total || 0);
-                count = Number(results.cart_informtion.total_count || 0);
-              } else if (payload && payload.cart_informtion) {
-                amount = toNumber(payload.cart_informtion.total_amount || 0);
-                count = Number(payload.cart_informtion.total_count || 0);
-              }
-
-              return { storeId: st.id, name: st.banner_name || st.name || `Store ${st.id}`, totalCount: count, totalAmount: amount };
-            })
-            .catch(function (err) {
-              console.warn('summary fetch error for store', st.id, err && err.status);
-              return { storeId: st.id, name: st.banner_name || st.name || `Store ${st.id}`, totalCount: 0, totalAmount: 0 };
-            });
         };
       });
 
+      // run with concurrency limit to avoid flooding the browser/server
       return runWithLimit(tasks, 6);
-    }).catch(function () {
-      return [];
     });
   }
 
+
   // -----------------------
-  // Rendering helpers (unchanged, but reading new fields)
+  // Render table and aggregates
   // -----------------------
   function renderDashboard(storeResults) {
+    // aggregates
     let aggProducts = 0, aggSuppliers = 0, aggSalesThisYear = 0;
     let aggTodaySales = 0, aggTodayIncome = 0, aggYesterdaySales = 0, aggYesterdayIncome = 0;
     let aggTotalExpenses = 0, aggYesterdayExpenses = 0, aggTotalProfit = 0;
@@ -436,6 +505,7 @@ function fetchAllStoresSummary() {
 
     storeResults.forEach(function (r, idx) {
       if (!r) return;
+      // append row
       const $row = $(`
         <tr data-id="${r.storeId}">
           <td class="text-center">${String(idx + 1).padStart(2, '0')}</td>
@@ -447,9 +517,11 @@ function fetchAllStoresSummary() {
       `);
       $tbody.append($row);
 
+      // fill per-store values
       $row.find('[data-store-sales]').text(r.salesThisYear ? formatTaka(r.salesThisYear) : '-');
       $row.find('[data-store-profit]').text(r.totalProfit ? formatTaka(r.totalProfit) : '-');
 
+      // accumulate
       aggProducts += r.productsCount || 0;
       aggSuppliers += r.suppliersCount || 0;
       aggSalesThisYear += r.salesThisYear || 0;
@@ -462,6 +534,7 @@ function fetchAllStoresSummary() {
       aggTotalProfit += r.totalProfit || 0;
     });
 
+    // update top widgets
     $('#total-products').text(aggProducts || '-');
     $('#total-sales-year').text(aggSalesThisYear ? formatTaka(aggSalesThisYear) : '-');
     $('#today-sales').text(aggTodaySales ? formatTaka(aggTodaySales) : '-');
@@ -476,43 +549,145 @@ function fetchAllStoresSummary() {
   }
 
   // -----------------------
-  // Chart: render counts (reused from previous improved version)
+  // Chart: per-store sales for selected range (count mode)
   // -----------------------
+  function rangeToStartDate(range) {
+    const now = new Date();
+    const d = new Date(now);
+    if (range === '7d') d.setDate(now.getDate() - 6);
+    else if (range === '1m') d.setMonth(now.getMonth() - 1);
+    else if (range === '6m') d.setMonth(now.getMonth() - 6);
+    else if (range === '1y') d.setFullYear(now.getFullYear() - 1);
+    else d.setMonth(now.getMonth() - 6);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  function isDateInRange(cartRow, startDate, endDate) {
+    const raw = cartRow.cart_date || cartRow.date || cartRow.cartDate || '';
+    const nd = normalizeDate(raw);
+    if (!nd) return false;
+    const d = new Date(nd);
+    d.setHours(0, 0, 0, 0);
+    return d >= startDate && d <= endDate;
+  }
+
+  function calculateSalesPerStoreForRange(range) {
+    const start = rangeToStartDate(range);
+    const end = new Date(); end.setHours(23, 59, 59, 999);
+
+    return getStoresList().then(function (stores) {
+      if (!stores || stores.length === 0) return [];
+
+      // build tasks to fetch only cart_informtion per store (use concurrency)
+      const tasks = stores.map(function (st) {
+        return function () {
+          const base = '/stores/' + st.id + '/fetch-data?tables=cart_informtion';
+          const url = NO_LIMIT ? base : base + '&limit=' + encodeURIComponent(REQUEST_LIMIT);
+
+          return $.ajax({ url, method: 'GET', dataType: 'json', timeout: 20000 })
+            .then(function (r) {
+              const payload = r.results ? r : (r.data ? r.data : r);
+              let arr = [];
+              if (payload.results && payload.results.cart_informtion && Array.isArray(payload.results.cart_informtion.data)) {
+                arr = payload.results.cart_informtion.data;
+              } else if (payload.cart_informtion && Array.isArray(payload.cart_informtion.data)) {
+                arr = payload.cart_informtion.data;
+              } else if (payload.cart_informtion && Array.isArray(payload.cart_informtion)) {
+                arr = payload.cart_informtion;
+              } else if (Array.isArray(payload)) arr = payload;
+
+              // filter non-objects (remove stray strings like "continue")
+              if (Array.isArray(arr)) arr = arr.filter(x => x && typeof x === 'object');
+              else arr = [];
+
+              let count = 0;
+              let sumAmount = 0;
+
+              if (Array.isArray(arr)) {
+                arr.forEach(function (row) {
+                  // defensive: ensure object and date exists
+                  if (!row || typeof row !== 'object') return;
+                  const rawDate = row.cart_date || row.date || row.cartDate || '';
+                  const nd = normalizeDate(rawDate);
+                  if (!nd) return;
+                  const d = new Date(nd);
+                  d.setHours(0, 0, 0, 0);
+                  if (d >= start && d <= end) {
+                    count++;
+                    const amt = cartSalesValue(row);
+                    if (Number.isFinite(amt)) sumAmount += amt;
+                  }
+                });
+              }
+
+              return { storeId: st.id, name: st.name, totalCount: count, totalAmount: sumAmount };
+            })
+            .catch(function (err) {
+              console.warn('dashboard: fetch error for store', st.id, err && err.status);
+              return { storeId: st.id, name: st.name, totalCount: 0, totalAmount: 0 };
+            });
+        };
+      });
+
+      return runWithLimit(tasks, 6);
+    }).catch(function () {
+      return [];
+    });
+  }
+
+  // === render chart using counts (integer) ===
   function renderStoreSalesChart(items, range) {
     items = Array.isArray(items) ? items.slice() : [];
     const canvasEl = document.getElementById('storeSalesChart');
     if (!canvasEl) return;
 
+    // destroy any existing chart attached to this canvas
     const existing = (typeof Chart !== 'undefined') ? Chart.getChart(canvasEl) : null;
     if (existing) {
       try { existing.destroy(); } catch (e) { console.warn('destroy failed', e); }
     }
     salesChartInstance = null;
 
+    // nothing to draw
     if (items.length === 0) {
       const ctx = canvasEl.getContext && canvasEl.getContext('2d');
       if (ctx) ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
       return;
     }
 
+    // convert counts to numbers and guard fields
     items = items.map(it => ({ storeId: it.storeId, name: it.name || 'Store', count: Number(it.totalCount || 0) }));
+
+    // sort desc by count
     items.sort((a, b) => b.count - a.count);
 
+    // configuration: show at most TOP_N bars for multi-store view
     const TOP_N = 10;
     const isSingle = items.length === 1;
-    const displayItems = isSingle ? items : items.slice(0, TOP_N);
+
+    let displayItems = isSingle ? items : items.slice(0, TOP_N);
+
+    // labels & data
     const labels = displayItems.map(i => i.name);
     const data = displayItems.map(i => i.count);
+
+    // layout: horizontal for single store, vertical for multi-store
     const indexAxis = isSingle ? 'y' : 'x';
 
+    // set container height based on number of bars for readability
     const chartWrapper = canvasEl.parentElement;
     if (chartWrapper) {
       chartWrapper.style.position = 'relative';
+      // give more height per bar when showing many bars
       const baseHeight = 250;
       const perBar = 28;
       const desired = Math.max(baseHeight, Math.min(800, displayItems.length * perBar));
       chartWrapper.style.height = desired + 'px';
     }
+
+    // Which axis is numeric? When indexAxis === 'y', x is numeric. Otherwise y is numeric.
+    const numericAxisId = (indexAxis === 'y') ? 'x' : 'y';
 
     salesChartInstance = new Chart(canvasEl, {
       type: 'bar',
@@ -523,7 +698,7 @@ function fetchAllStoresSummary() {
           data: data,
           backgroundColor: 'rgba(54,162,235,0.65)',
           borderColor: 'rgba(54,162,235,1)',
-          borderWidth: 1
+          borderWidth: 1,
         }]
       },
       options: {
@@ -535,6 +710,7 @@ function fetchAllStoresSummary() {
           tooltip: {
             callbacks: {
               label: function (ctx) {
+                // ctx.parsed contains {x, y} depending on orientation
                 const val = ctx.parsed && (ctx.parsed.x ?? ctx.parsed.y);
                 return (ctx.dataset.label ? ctx.dataset.label + ': ' : '') + Number(val || 0).toLocaleString('en-IN') + ' orders';
               }
@@ -542,27 +718,37 @@ function fetchAllStoresSummary() {
           }
         },
         scales: {
+          // category axis (labels) - hide ticks if too crowded
           x: (indexAxis === 'x') ? {
             beginAtZero: true,
-            ticks: { callback: v => Number(v).toLocaleString('en-IN'), maxTicksLimit: 8 },
+            ticks: {
+              callback: v => Number(v).toLocaleString('en-IN'),
+              maxTicksLimit: 8
+            },
             grid: { display: true, drawBorder: false }
           } : { display: true, grid: { display: true, drawBorder: false } },
 
           y: (indexAxis === 'y') ? {
             beginAtZero: true,
-            ticks: { callback: v => Number(v).toLocaleString('en-IN'), maxTicksLimit: 8 },
+            ticks: {
+              callback: v => Number(v).toLocaleString('en-IN'),
+              maxTicksLimit: 8
+            },
             grid: { display: true, drawBorder: false }
           } : { display: true, grid: { display: true, drawBorder: false } }
         },
+        // small layout padding so labels don't cut off
         layout: { padding: { top: 6, right: 12, left: 6, bottom: 6 } },
-        elements: { bar: { borderSkipped: false } }
+        // responsive label rotation for many bars
+        elements: {
+          bar: { borderSkipped: false }
+        }
       }
     });
   }
 
-  // -----------------------
-  // refreshChart uses summary with date range parameters
-  // -----------------------
+
+  // refreshChart with a small lock to prevent overlapping refreshes
   function refreshChart(range) {
     if (chartBusy) return;
     chartBusy = true;
@@ -578,20 +764,20 @@ function fetchAllStoresSummary() {
         console.error('Chart error', err);
       })
       .finally(function () {
+        // small grace window to avoid spamming
         setTimeout(function () { chartBusy = false; }, 250);
       });
   }
 
-  // -----------------------
-  // Init: use summary fetch to populate dashboard and chart
-  // -----------------------
-  fetchAllStoresSummary().then(function (storeResults) {
+  // init: load all store data, render dashboard, then load chart for default range
+  fetchAllStoresData().then(function (storeResults) {
     renderDashboard(storeResults || []);
+    // init chart after dashboard populated
     const defaultRange = $('.chart-filter .btn.active').data('range') || '6m';
     refreshChart(defaultRange);
   });
 
-  // chart range button click
+  // chart range button click (debounced by chartBusy)
   $(document).on('click', '.chart-filter .btn', function () {
     const r = $(this).data('range') || '6m';
     refreshChart(r);
@@ -599,6 +785,5 @@ function fetchAllStoresSummary() {
 
 });
 </script>
-
 
 @endsection
