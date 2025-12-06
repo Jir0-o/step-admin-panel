@@ -51,6 +51,12 @@
               <span class="side-text">User Management</span>
             </a>
           </li>
+          <li>
+            <a href="{{ route('admin.roles-permissions.index') }}" class="ps-3">
+              <i class="ri-shield-keyhole-line"></i>
+              <span class="side-text">Role & Permission</span>
+            </a>
+          </li>
         </ul>
       </div>
 

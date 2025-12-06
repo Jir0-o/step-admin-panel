@@ -3,7 +3,7 @@
   <div class="d-flex gap-2 align-items-center">
     <button class="theme-mode btn p-1"><i class="ri-moon-line"></i></button>
     <button class="notification btn p-1"><i class="ri-notification-3-line"></i></button>
-    <a href="#"><button class="btn p-1"><i class="ri-settings-5-line"></i></button></a>
+    <a href="{{ route('admin.roles-permissions.index') }}" ><button class="btn p-1"><i class="ri-settings-5-line"></i></button></a>
     <div class="profile-box d-flex align-items-center">
       <img src="{{ asset('assets/img/profile.jpg') }}" alt="Profile Image" loading="lazy" />
       <div class="profile-info">
