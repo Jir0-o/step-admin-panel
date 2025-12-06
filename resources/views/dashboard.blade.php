@@ -302,7 +302,6 @@ function fetchAllStoresSummary() {
         const url = '/stores/' + st.id + '/fetch-summary?tables=' + encodeURIComponent('products,suppliers,cart_informtion,expense_details,banner_information');
         return $.ajax({ url: url, method: 'GET', dataType: 'json', timeout: 15000 })
           .then(function (r) {
-            console.log('Summary for store ' + st.id, r);
             // 'r' is proxy wrapper; actual POS payload is usually in r.data or r.results
             const payload = r && r.data ? r.data : (r || {});
             const results = payload.results || payload;

@@ -21,6 +21,7 @@ use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkPlanController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Admin\RolePermissionController;
 
 
 
@@ -47,6 +48,26 @@ Route::middleware([
     config('jetstream.auth_session'),
     'verified',
 ])->group(function () {
+
+    Route::middleware(['auth'])
+    ->prefix('admin')
+    ->name('admin.')
+    ->group(function () {
+        Route::get('/roles-permissions', [RolePermissionController::class, 'index'])->name('roles-permissions.index');
+
+        // Roles CRUD
+        Route::post('/roles', [RolePermissionController::class, 'storeRole'])->name('roles.store');
+        Route::put('/roles/{role}', [RolePermissionController::class, 'updateRole'])->name('roles.update');
+        Route::delete('/roles/{role}', [RolePermissionController::class, 'destroyRole'])->name('roles.destroy');
+
+        // Permissions CRUD
+        Route::post('/permissions', [RolePermissionController::class, 'storePermission'])->name('permissions.store');
+        Route::put('/permissions/{permission}', [RolePermissionController::class, 'updatePermission'])->name('permissions.update');
+        Route::delete('/permissions/{permission}', [RolePermissionController::class, 'destroyPermission'])->name('permissions.destroy');
+
+        // Attach / detach permissions to role
+        Route::put('/roles/{role}/permissions', [RolePermissionController::class, 'syncRolePermissions'])->name('roles.permissions.sync');
+    });
 
     Route::resource('dashboard', DashboardController::class);
     Route::resource('user', UserController::class);
