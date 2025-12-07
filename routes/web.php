@@ -22,17 +22,11 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkPlanController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\RolePermissionController;
-
-
+use App\Http\Controllers\StoreRouteController;
 
 Route::get('/', function () {
     return view('welcome');
 });
-
-Route::view('/store',         'backend.admin.store')->name('store.index');
-Route::view('/discount',      'backend.admin.discount')->name('discount.index');
-Route::view('/route',         'backend.admin.route')->name('route.index');
-Route::view('/user',          'backend.admin.user')->name('user.index');
 
 Route::get('/login', [AuthenticatedSessionController::class, 'create'])->middleware('guest')->name('login');
 Route::post('/login', [AuthenticatedSessionController::class, 'store'])->middleware('guest');
@@ -48,6 +42,10 @@ Route::middleware([
     config('jetstream.auth_session'),
     'verified',
 ])->group(function () {
+
+    Route::view('/store',         'backend.admin.store')->name('store.index');
+    Route::view('/discount',      'backend.admin.discount')->name('discount.index');
+    Route::view('/user',          'backend.admin.user')->name('user.index');
 
     Route::middleware(['auth'])
     ->prefix('admin')
@@ -73,6 +71,7 @@ Route::middleware([
     Route::resource('user', UserController::class);
     Route::resource('roles', RoleController::class);
     Route::resource('permission', PermissionController::class);
+    Route::resource('store-routes', StoreRouteController::class);
 
     Route::resource('stores', StoreController::class);
 

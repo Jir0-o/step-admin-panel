@@ -40,7 +40,7 @@
             </a>
           </li>
           <li>
-            <a href="{{ url('/route') }}" class="ps-3">
+            <a href="{{ route('store-routes.index') }}" class="ps-3">
               <i class="ri-links-fill"></i>
               <span class="side-text">Route Management</span>
             </a>
