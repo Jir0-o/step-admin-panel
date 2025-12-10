@@ -3,36 +3,57 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class RolePermissionSeeder extends Seeder
 {
-    public function run(): void
+    public function run()
     {
-        // Basic permissions
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
         $permissions = [
             'view_dashboard',
+            'view_store',
+            'view_discount',
+            'create_stores',
+            'view_route_management',
             'manage_users',
-            'manage_stores',
             'manage_settings',
         ];
 
-        foreach ($permissions as $p) {
-            Permission::firstOrCreate(['name' => $p, 'guard_name' => 'web']);
+        foreach ($permissions as $permission) {
+            Permission::firstOrCreate([
+                'name' => $permission,
+                'guard_name' => 'web',
+            ]);
         }
 
         // Roles
-        $admin = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
-        $manager = Role::firstOrCreate(['name' => 'manager', 'guard_name' => 'web']);
+        $adminRole = Role::firstOrCreate([
+            'name' => 'admin',
+            'guard_name' => 'web',
+        ]);
 
-        // Give all permissions to admin
-        $admin->syncPermissions(Permission::all());
+        $userRole = Role::firstOrCreate([
+            'name' => 'user',
+            'guard_name' => 'web',
+        ]);
 
-        // Give only selected permissions to manager
-        $manager->syncPermissions([
+        // Admin permissions
+        $adminRole->syncPermissions([
             'view_dashboard',
-            'manage_stores',
+            'create_stores',
+            'view_route_management',
+            'manage_users',
+            'manage_settings',
+        ]);
+
+        // User permissions
+        $userRole->syncPermissions([
+            'view_dashboard',
+            'view_store',
+            'view_discount',
         ]);
     }
 }

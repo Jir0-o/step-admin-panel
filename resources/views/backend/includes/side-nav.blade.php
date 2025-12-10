@@ -11,52 +11,66 @@
       <div class="menu-list">
         <p class="m-0 text-muted ps-3 pb-2"><span class="side-text">General</span></p>
         <ul class="m-0 p-0">
+          @can('view_dashboard')
           <li>
-            <a href="{{ url('/dashboard') }}" class="ps-3">
+            <a href="{{ route('dashboard.index') }}" class="ps-3">
               <i class="ri-gallery-view-2"></i>
               <span class="side-text">Dashboard</span>
             </a>
           </li>
+          @endcan
+          @can('view_store')
           <li>
-            <a href="{{ url('/store') }}" class="ps-3">
+            <a href="{{ route('store.index') }}" class="ps-3">
               <i class="ri-store-2-line"></i>
               <span class="side-text">Store</span>
             </a>
           </li>
+          @endcan
+          @can('view_discount')
           <li>
-            <a href="{{ url('/discount') }}" class="ps-3">
+            <a href="{{ route('discount.index') }}" class="ps-3">
               <i class="ri-price-tag-3-line"></i>
               <span class="side-text">Discount</span>
             </a>
           </li>
+          @endcan
         </ul>
 
         <p class="m-0 text-muted ps-3 pt-3 pb-2"><span class="side-text">Advance</span></p>
         <ul class="m-0 p-0">
+          @can('create_stores')
           <li>
             <a href="{{ route('stores.index') }}" class="ps-3">
               <i class="ri-database-line"></i>
               <span class="side-text">Create Store</span>
             </a>
           </li>
+          @endcan
+          @can('view_route_management')
           <li>
             <a href="{{ route('store-routes.index') }}" class="ps-3">
               <i class="ri-links-fill"></i>
               <span class="side-text">Route Management</span>
             </a>
           </li>
+          @endcan
+          @can('manage_users')
           <li>
-            <a href="{{ url('/user') }}" class="ps-3">
+            <a href="{{ route('user.index') }}" class="ps-3">
               <i class="ri-user-line"></i>
               <span class="side-text">User Management</span>
             </a>
           </li>
+          @endcan
+          @can('manage_settings')
           <li>
             <a href="{{ route('admin.roles-permissions.index') }}" class="ps-3">
               <i class="ri-shield-keyhole-line"></i>
               <span class="side-text">Role & Permission</span>
             </a>
           </li>
+          @endcan
         </ul>
       </div>
 
