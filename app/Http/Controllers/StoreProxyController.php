@@ -35,14 +35,12 @@ class StoreProxyController extends Controller
         $tokenRow = null;
         try {
             $tokenRow = StoreToken::where('store_id', $store->id)
-                        ->where('user_id', $userId)
                         ->latest('created_at')
                         ->first();
         } catch (\Throwable $e) {
             Log::warning("StoreProxy: token model query failed, fallback DB: ".$e->getMessage());
             $tokenRow = DB::table('store_tokens')
                         ->where('store_id', $store->id)
-                        ->where('user_id', $userId)
                         ->orderByDesc('created_at')
                         ->first();
         }

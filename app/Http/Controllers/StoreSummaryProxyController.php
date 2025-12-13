@@ -37,14 +37,12 @@ class StoreSummaryProxyController extends Controller
         // -------------------------------
         try {
             $tokenRow = StoreToken::where('store_id', $store->id)
-                ->where('user_id', Auth::id())
                 ->latest('created_at')
                 ->first();
         } catch (\Throwable $e) {
             Log::warning("StoreSummaryProxy: token fallback: ".$e->getMessage());
             $tokenRow = DB::table('store_tokens')
                 ->where('store_id', $store->id)
-                ->where('user_id', Auth::id())
                 ->orderByDesc('created_at')
                 ->first();
         }
