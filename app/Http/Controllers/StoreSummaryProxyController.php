@@ -107,7 +107,7 @@ class StoreSummaryProxyController extends Controller
         // GET fallback
         // -------------------------------
         try {
-            $url = $summaryEndpoint . '?' . http_build_query($params);
+            $url = $summaryEndpoint . '?' . http_build_query(data: $params);
 
             $resp = $client->get($url, [
                 'headers' => [
