@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Carbon\Carbon;
 
 class StoreToken extends Model
 {
@@ -23,4 +24,13 @@ class StoreToken extends Model
         'expires_at' => 'datetime',
         'meta' => 'array',
     ];
+
+    public function isNearExpiry(int $thresholdSeconds = 300): bool
+    {
+        if (! $this->expires_at) {
+            return false;
+        }
+
+        return Carbon::now()->diffInSeconds($this->expires_at, false) <= $thresholdSeconds;
+    }
 }

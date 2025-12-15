@@ -75,6 +75,12 @@ Route::middleware([
 
     Route::resource('stores', StoreController::class);
 
+    Route::post('/store/sync-store-tokens', [StoreController::class,'sync'])
+        ->name('ajax.sync.store.tokens');
+
+    Route::get('/store/{store}/details', [StoreController::class, 'showDetails'])
+        ->name('store.details');
+
     Route::get('/stores/{store}/fetch-data', [StoreProxyController::class, 'fetchData'])->name('stores.fetch-data');
     Route::match(['get','post'], '/stores/{store}/fetch-summary', [StoreSummaryProxyController::class, 'fetchSummary'])->name('stores.fetch-summary');
 

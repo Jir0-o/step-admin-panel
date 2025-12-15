@@ -13,6 +13,7 @@ use GuzzleHttp\Exception\RequestException;
 use App\Models\Store;
 use App\Models\StoreToken;
 use Carbon\Carbon;
+use App\Services\StoreTokenSyncService;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -43,6 +44,8 @@ class AuthenticatedSessionController extends Controller
 
         // Sync tokens for all configured stores (server-side stored only)
         $syncResults = $this->syncStoreTokens($user->id, $credentials['email'], $credentials['password']);
+        app(StoreTokenSyncService::class)
+            ->syncForUser($user->id, $credentials['email'], $credentials['password']);
 
         // optional: log results for admin / debugging
         Log::info('Store tokens sync results for user '.$user->id, ['results' => $syncResults]);

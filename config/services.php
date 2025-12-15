@@ -31,4 +31,8 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'store_token' => [
+        'refresh_before_seconds' => 300,
+    ],
+
 ];

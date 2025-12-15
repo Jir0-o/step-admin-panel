@@ -48,5 +48,52 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
   <script> if (window.AOS) AOS.init(); </script>
 
+<script>
+  (function () {
+
+      if (!document.querySelector('meta[name="csrf-token"]')) return;
+
+      const SYNC_INTERVAL = 10 * 60 * 1000; // 2 minutes
+      let isSyncing = false;
+
+      function syncStoreTokens() {
+          if (isSyncing) return;
+          isSyncing = true;
+
+          fetch("{{ route('ajax.sync.store.tokens') }}", {
+              method: 'POST',
+              headers: {
+                  'X-CSRF-TOKEN': document
+                      .querySelector('meta[name="csrf-token"]')
+                      .getAttribute('content'),
+                  'Accept': 'application/json'
+              }
+          })
+          .then(res => res.json())
+          .then(data => {
+              if (!data.ok) return;
+
+              if (data.expiring_tokens.length > 0) {
+                  alert(
+                      'Warning: Some store sessions are about to expire. They will refresh automatically.'
+                  );
+              }
+          })
+          .catch(err => {
+              console.error('Error syncing store tokens:', err);
+          })
+          .finally(() => {
+              isSyncing = false;
+          });
+      }
+
+      // Initial sync
+      syncStoreTokens();
+
+      // Repeat while user is active
+      setInterval(syncStoreTokens, SYNC_INTERVAL);
+
+  })();
+</script>
 </body>
 </html>

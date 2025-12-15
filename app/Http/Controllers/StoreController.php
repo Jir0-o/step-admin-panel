@@ -3,9 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\Store;
+use App\Models\StoreRoute;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use App\Services\StoreTokenSyncService;
+use App\Models\StoreToken;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
 
 class StoreController extends Controller
 {
@@ -144,6 +150,155 @@ class StoreController extends Controller
         } catch (\Throwable $e) {
             Log::error('Store delete error: '.$e->getMessage());
             return response()->json(['ok' => false, 'message' => 'Failed to delete store'], 500);
+        }
+    }
+
+    public function sync(
+        Request $request,
+        StoreTokenSyncService $service
+    ) {
+        $userId = auth()->id();
+
+        $results = $service->syncForUser($userId);
+
+        $expiring = StoreToken::where('user_id', $userId)
+            ->whereNotNull('expires_at')
+            ->get()
+            ->filter(fn ($t) => $t->isNearExpiry())
+            ->map(fn ($t) => [
+                'store_id' => $t->store_id,
+                'expires_at' => $t->expires_at->toDateTimeString(),
+            ])
+            ->values();
+
+        return response()->json([
+            'ok' => true,
+            'synced_at' => now()->toDateTimeString(),
+            'results' => $results,
+            'expiring_tokens' => $expiring,
+        ]);
+    }
+
+    public function showDetails($storeId)
+    {
+        $store = Store::findOrFail($storeId);
+
+        if (!Auth::check()) {
+            return redirect()->route('login');
+        }
+
+        // Get latest token
+        $tokenRow = StoreToken::where('store_id', $storeId)
+            ->latest()
+            ->first();
+
+        if (!$tokenRow) {
+            return back()->with('error', 'Store token missing');
+        }
+
+        try {
+            $token = Crypt::decryptString($tokenRow->token);
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Invalid store token');
+        }
+
+        // Resolve summary route STRICTLY from store_routes
+        $route = StoreRoute::where('store_id', $storeId)
+            ->where('endpoint', 'summary')
+            ->where('is_active', true)
+            ->first();
+
+        if (!$route) {
+            return back()->with('error', 'Summary API route not configured');
+        }
+
+        // URL already includes /summary at the end
+        $url = rtrim($route->base_url, '/');
+        
+        // Prepare tables as comma-separated string (as expected by the API)
+        $tables = 'products,suppliers,cart_informtion,expense_details,banner_information,customer_payments,customer_payment_infos,expenses,purchase_info,purchase_details,supplier_payments,cart_items,final_stock_table';
+
+        try {
+            // First try POST (as in your fetchSummary method)
+            $client = new \GuzzleHttp\Client([
+                'timeout' => 20,
+                'http_errors' => false,
+            ]);
+
+            $resp = $client->post($url, [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $token,
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                ],
+                'json' => ['tables' => $tables], // Send as JSON with tables string
+            ]);
+
+            // If POST fails, try GET fallback
+            if ($resp->getStatusCode() >= 400) {
+                $urlWithParams = $url . '?' . http_build_query(['tables' => $tables]);
+                $resp = $client->get($urlWithParams, [
+                    'headers' => [
+                        'Authorization' => 'Bearer ' . $token,
+                        'Accept' => 'application/json',
+                    ],
+                ]);
+            }
+
+            if ($resp->getStatusCode() >= 200 && $resp->getStatusCode() < 300) {
+                $data = json_decode($resp->getBody(), true);
+                
+                // Check if response has the expected structure
+                if (isset($data['ok']) && $data['ok'] && isset($data['results'])) {
+                    $results = $data['results'];
+                    
+                    // Prepare summary data for the view
+                    $summary = [
+                        'cart' => $results['cart_informtion'] ?? [],
+                        'expenses' => $results['expense_details'] ?? [],
+                        'products' => $results['products'] ?? [],
+                        'suppliers' => $results['suppliers'] ?? [],
+                        'banner' => $results['banner_information'] ?? [],
+                        'others' => collect($results)->except([
+                            'cart_informtion',
+                            'expense_details',
+                            'products',
+                            'suppliers',
+                            'banner_information',
+                        ])->toArray(),
+                    ];
+
+                    return view('backend.admin.storeDetails', [
+                        'store' => $store,
+                        'summary' => $summary,
+                        'data' => $data, // Pass full data for raw view
+                    ]);
+                } else {
+                    // Handle unexpected response structure
+                    return view('backend.admin.storeDetails', [
+                        'store' => $store,
+                        'error' => 'Unexpected API response format',
+                        'data' => $data, // Still pass data for debugging
+                    ]);
+                }
+            } else {
+                $errorBody = json_decode($resp->getBody(), true);
+                $errorMessage = $errorBody['message'] ?? 'API returned status: ' . $resp->getStatusCode();
+                
+                return view('backend.admin.storeDetails', [
+                    'store' => $store,
+                    'error' => $errorMessage,
+                    'status' => $resp->getStatusCode(),
+                ]);
+            }
+
+        } catch (\Throwable $e) {
+            Log::error('Store details error: ' . $e->getMessage());
+            
+            return view('backend.admin.storeDetails', [
+                'store' => $store,
+                'error' => 'Failed to connect to POS: ' . $e->getMessage(),
+            ]);
         }
     }
 }
