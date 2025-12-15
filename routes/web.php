@@ -22,6 +22,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkPlanController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\RolePermissionController;
+use App\Http\Controllers\StockDataController;
 use App\Http\Controllers\StoreRouteController;
 
 Route::get('/', function () {
@@ -78,11 +79,20 @@ Route::middleware([
     Route::post('/store/sync-store-tokens', [StoreController::class,'sync'])
         ->name('ajax.sync.store.tokens');
 
-    Route::get('/store/{store}/details', [StoreController::class, 'showDetails'])
-        ->name('store.details');
 
     Route::get('/stores/{store}/fetch-data', [StoreProxyController::class, 'fetchData'])->name('stores.fetch-data');
     Route::match(['get','post'], '/stores/{store}/fetch-summary', [StoreSummaryProxyController::class, 'fetchSummary'])->name('stores.fetch-summary');
+
+    Route::get('/store/{store}/stock-table', [StockDataController::class, 'index'])
+        ->name('manager.stock-data.index');
+        
+    // API route for datatable AJAX
+    Route::get('/store/{store}/stock-table/data', [StockDataController::class, 'getStockData'])
+        ->name('manager.stock-data.data');
+
+    Route::get('/store/{store}/stock-table/export', [StockDataController::class, 'exportCsv'])
+            ->name('manager.stock-data.export');
+
 
     //Notification Route
     Route::get('/notifications/count', [NotificationController::class, 'notificationCount'])->name('notifications.count');

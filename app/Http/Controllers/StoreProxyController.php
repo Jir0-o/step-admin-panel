@@ -2,133 +2,128 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Store;
+use App\Models\StoreToken;
+use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
-use GuzzleHttp\Client;
-use App\Models\Store;
-use App\Models\StoreToken;
 
 class StoreProxyController extends Controller
 {
-    /**
-     * Proxy a data request to a remote store's API using stored token.
-     * Example:
-     * /stores/{store}/fetch-data?tables=products,suppliers
-     */
     public function fetchData(Request $request, Store $store)
     {
-        // -------------------------------
-        // Validate
-        // -------------------------------
-        $tables = $request->query('tables');
-        if (!$tables) {
-            return response()->json(['ok' => false, 'message' => 'Missing "tables" parameter'], 400);
-        }
-
+        // Authentication check
         if (!Auth::check()) {
-            return response()->json(['ok' => false, 'message' => 'Unauthenticated'], 401);
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
         }
 
-        // -------------------------------
-        // Fetch latest token (ANY user)
-        // -------------------------------
+        // Validate required parameters
+        $request->validate([
+            'tables' => 'required|string',
+        ]);
+
+        $user = Auth::user();
+
+        // Get user's token for this store
         $tokenRow = StoreToken::where('store_id', $store->id)
-            ->latest('created_at')
+            ->where('user_id', $user->id)
+            ->latest()
             ->first();
 
         if (!$tokenRow || empty($tokenRow->token)) {
-            return response()->json(['ok' => false, 'message' => 'No token found'], 403);
+            return response()->json([
+                'ok' => false,
+                'message' => 'No access token available for this store',
+            ], 403);
         }
 
+        // Decrypt the token
         try {
             $token = Crypt::decryptString($tokenRow->token);
         } catch (\Throwable $e) {
-            Log::error("StoreProxy token decrypt failed for store {$store->id}: ".$e->getMessage());
-            return response()->json(['ok' => false, 'message' => 'Invalid token'], 500);
-        }
+            Log::error('Token decryption failed', [
+                'store_id' => $store->id,
+                'user_id' => $user->id,
+            ]);
 
-        // -------------------------------
-        // USE STORED DATA URL DIRECTLY
-        // -------------------------------
-        $dataEndpoint = rtrim($store->base_url, '/');
-
-        if (!str_contains($dataEndpoint, '/api/manager/data/multi')) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Invalid data endpoint URL in database',
-                'base_url' => $dataEndpoint
+                'message' => 'Invalid token configuration',
             ], 500);
         }
 
-        // -------------------------------
-        // Params
-        // -------------------------------
-        $params = ['tables' => $tables];
+        // Build remote API endpoint
+        $baseUrl = rtrim($store->base_url, '/');
+        $endpoint = $baseUrl . '/api/manager/data/multi';
 
-        $client = new Client([
-            'timeout' => 20,
-            'http_errors' => false,
-            'verify' => false,
+        // Prepare request parameters
+        $params = $request->only([
+            'tables',
+            'date_from',
+            'date_to',
+            'connection',
+            'limit',
+            'page',
         ]);
 
-        // -------------------------------
-        // POST (primary)
-        // -------------------------------
+        // Make HTTP request
         try {
-            $resp = $client->post($dataEndpoint, [
+            $client = new Client([
+                'timeout' => 25,
+                'http_errors' => false,
+                'verify' => false,
+            ]);
+
+            $response = $client->post($endpoint, [
                 'headers' => [
-                    'Authorization' => 'Bearer '.$token,
-                    'Accept'        => 'application/json',
+                    'Authorization' => 'Bearer ' . $token,
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
                 ],
                 'json' => $params,
             ]);
 
-            if ($resp->getStatusCode() >= 200 && $resp->getStatusCode() < 300) {
+            $statusCode = $response->getStatusCode();
+            $body = (string) $response->getBody();
+
+            if ($statusCode >= 200 && $statusCode < 300) {
+                $data = json_decode($body, true);
+
+                // Check if remote API returned an error
+                if (isset($data['ok']) && $data['ok'] === false) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => $data['message'] ?? 'Remote API error',
+                        'store_id' => $store->id,
+                    ], 502);
+                }
+
                 return response()->json([
                     'ok' => true,
                     'store_id' => $store->id,
                     'store_name' => $store->name,
-                    'data' => json_decode((string)$resp->getBody(), true),
+                    'data' => $data,
                 ]);
             }
+
+            // Handle non-2xx responses
+            throw new \Exception("Remote API returned status {$statusCode}");
+
         } catch (\Throwable $e) {
-            Log::warning("StoreProxy POST failed: ".$e->getMessage());
-        }
-
-        // -------------------------------
-        // GET fallback
-        // -------------------------------
-        try {
-            $url = $dataEndpoint.'?'.http_build_query($params);
-
-            $resp = $client->get($url, [
-                'headers' => [
-                    'Authorization' => 'Bearer '.$token,
-                    'Accept'        => 'application/json',
-                ],
+            Log::error('Failed to fetch store data', [
+                'store_id' => $store->id,
+                'user_id' => $user->id,
+                'endpoint' => $endpoint,
+                'error' => $e->getMessage(),
             ]);
 
-            if ($resp->getStatusCode() >= 200 && $resp->getStatusCode() < 300) {
-                return response()->json([
-                    'ok' => true,
-                    'store_id' => $store->id,
-                    'store_name' => $store->name,
-                    'data' => json_decode((string)$resp->getBody(), true),
-                ]);
-            }
-        } catch (\Throwable $e) {
-            Log::warning("StoreProxy GET failed: ".$e->getMessage());
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to retrieve data from store server',
+                'store_id' => $store->id,
+            ], 502);
         }
-
-        // -------------------------------
-        // Fail
-        // -------------------------------
-        return response()->json([
-            'ok' => false,
-            'message' => 'Remote data endpoint failed',
-            'endpoint' => $dataEndpoint,
-        ], 502);
     }
 }
