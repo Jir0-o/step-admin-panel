@@ -25,137 +25,258 @@ class StockDataController extends Controller
      */
     public function getStockData(Request $request, Store $store)
     {
-        // Validate route config
+        Log::info('==== getStockData START ====', ['store_id' => $store->id, 'request' => $request->all()]);
+
         $route = StoreRoute::where('store_id', $store->id)
             ->where('endpoint', 'api/manager/data/final-stock-data')
             ->where('is_active', true)
             ->first();
 
         if (!$route || !$route->base_url) {
-            return response()->json([
-                'draw' => (int)$request->input('draw', 0),
-                'recordsTotal' => 0,
-                'recordsFiltered' => 0,
-                'data' => [],
-                'error' => 'Store route not configured'
-            ]);
+            Log::warning('Stock endpoint not configured', ['store_id' => $store->id]);
+            return response()->json(['ok' => false, 'message' => 'Stock data endpoint not configured for this store'], 400);
         }
 
-        // Token
         $tokenRow = StoreToken::where('store_id', $store->id)->latest('created_at')->first();
         if (!$tokenRow || empty($tokenRow->token)) {
-            return response()->json([
-                'draw' => (int)$request->input('draw', 0),
-                'recordsTotal' => 0,
-                'recordsFiltered' => 0,
-                'data' => [],
-                'error' => 'No API token available'
-            ]);
+            Log::warning('No token for store', ['store_id' => $store->id]);
+            return response()->json(['ok' => false, 'message' => 'No API token available'], 401);
         }
 
         try {
             $token = Crypt::decryptString($tokenRow->token);
             $posUrl = rtrim($route->base_url, '/') . '/' . ltrim($route->endpoint, '/');
 
-            // DataTables paging
+            Log::info('Calling POS', ['pos_url' => $posUrl]);
+
+            // Get request parameters
             $start = max(0, (int)$request->input('start', 0));
-            $length = max(1, (int)$request->input('length', 25));
+            $length = max(1, (int)$request->input('length', 100));
+            $draw = (int)$request->input('draw', 1);
             $page = (int) floor($start / $length) + 1;
 
-            // Prepare query for POS
+            // Build query for POS API
             $query = [
-                'page' => $page,
+                'page'     => $page,
                 'per_page' => $length,
-                'store_id' => $store->id,
             ];
 
-            // Pass search (POS must support it; otherwise ignored)
-            if ($search = trim($request->input('search.value') ?? $request->input('search_product') ?? '')) {
-                $query['search'] = $search;
+            // Handle search
+            if ($request->has('search.value') && !empty($request->input('search.value'))) {
+                $query['search'] = $request->input('search.value');
+            } elseif ($request->has('search_product') && !empty($request->input('search_product'))) {
+                $query['search'] = $request->input('search_product');
             }
 
-            // Map ordering to safe column names (DataTables sends column index)
-            $columnIndex = $request->input('order.0.column');
-            $orderDir = $request->input('order.0.dir', 'desc');
-
-            // Allowed mapping from DataTables column index to POS column name
-            $columnMap = [
-                0 => 'stock_id',
-                1 => 'article',
-                2 => 'product_id',
-                3 => 'barcode',
-                4 => 'colors_id',
-                5 => 'final_quantity',
-                6 => 'purchase_price',
-                7 => null, // computed total_value
-                8 => 'in_order_queue',
-                9 => 'sync_status',
-            ];
-
-            if (is_numeric($columnIndex) && isset($columnMap[(int)$columnIndex]) && $columnMap[(int)$columnIndex]) {
-                $query['order_by'] = $columnMap[(int)$columnIndex];
-                $query['order_dir'] = in_array(strtolower($orderDir), ['asc','desc']) ? $orderDir : 'desc';
+            // Handle ordering
+            if ($request->has('order.0.column') && $request->has('order.0.dir')) {
+                $columnIndex = (int)$request->input('order.0.column');
+                $orderDir = $request->input('order.0.dir', 'desc');
+                
+                $columnMap = [
+                    0  => 'stock_id',
+                    1  => 'product_material_name',
+                    2  => 'barcode',
+                    3  => 'foot_ware_categories_name',
+                    4  => 'type_name',
+                    5  => 'material_type_name',
+                    6  => 'brand_type_name',
+                    7  => 'colors_name',
+                    8  => 'size_name',
+                    9  => 'total_purchased_quantity',
+                    10 => 'total_sold_quantity',
+                    11 => 'final_quantity',
+                    12 => 'sales_price',
+                ];
+                
+                if (isset($columnMap[$columnIndex])) {
+                    $query['order_by'] = $columnMap[$columnIndex];
+                    $query['order_dir'] = in_array(strtolower($orderDir), ['asc','desc']) ? $orderDir : 'desc';
+                }
             }
 
-            // Forward custom filters
-            if ($filterCategory = $request->input('filter_category')) $query['filter_category'] = $filterCategory;
-            if ($filterStatus = $request->input('filter_status')) $query['filter_status'] = $filterStatus;
+            Log::info('POS query params', ['query' => $query]);
 
+            // Make API call to POS for paginated data
             $response = Http::withToken($token)
                 ->timeout(60)
                 ->acceptJson()
                 ->get($posUrl, array_filter($query));
 
-            if (! $response->successful()) {
+            Log::info('POS HTTP status', ['status' => $response->status()]);
+
+            if (!$response->successful()) {
+                Log::error('POS returned non-success', ['status' => $response->status(), 'body' => $response->body()]);
                 return response()->json([
-                    'draw' => (int)$request->input('draw', 0),
+                    'draw' => $draw,
                     'recordsTotal' => 0,
                     'recordsFiltered' => 0,
                     'data' => [],
                     'error' => 'Failed to fetch data from POS: ' . $response->status()
-                ]);
+                ], 502);
             }
 
             $body = $response->json();
-
-            if (!($body['ok'] ?? false)) {
+            
+            if (!isset($body['ok']) || $body['ok'] !== true) {
+                Log::warning('POS returned ok:false', ['body' => $body]);
                 return response()->json([
-                    'draw' => (int)$request->input('draw', 0),
+                    'draw' => $draw,
                     'recordsTotal' => 0,
                     'recordsFiltered' => 0,
                     'data' => [],
                     'error' => $body['message'] ?? 'POS returned error'
-                ]);
+                ], 422);
             }
 
+            // Extract data from response
             $pageData = $body['data'] ?? [];
             $rows = $pageData['data'] ?? [];
-            $total = (int) ($pageData['total'] ?? count($rows));
+            $total = (int) ($pageData['total'] ?? 0);
+            $perPage = (int) ($pageData['per_page'] ?? $length);
+            $currentPage = (int) ($pageData['current_page'] ?? $page);
+            $lastPage = (int) ($pageData['last_page'] ?? 1);
 
-            return response()->json([
-                'draw' => (int)$request->input('draw', 0),
+            // Get summary from POS response (THIS IS FOR ALL DATA)
+            $allDataSummary = [
+                'total_items' => $total,
+                'total_quantity' => 0,
+                'total_value' => 0,
+                'total_purchased' => 0,
+                'total_sold' => 0,
+            ];
+
+            if (isset($body['data']['summary'])) {
+                $summaryData = $body['data']['summary'];
+                $allDataSummary = [
+                    'total_items' => $summaryData['total_items'] ?? $total,
+                    'total_quantity' => $summaryData['total_quantity'] ?? 0,
+                    'total_value' => $summaryData['total_value'] ?? 0,
+                    'total_purchased' => $summaryData['total_purchased'] ?? 0,
+                    'total_sold' => $summaryData['total_sold'] ?? 0,
+                ];
+            }
+
+            // Get filters from request for local filtering
+            $categoryFilter = $request->input('filter_category');
+            $typeFilter = $request->input('filter_type');
+            $stockStatusFilter = $request->input('filter_status');
+
+            // Transform rows for display and apply local filtering
+            $transformed = [];
+            $currentPageData = []; // Data for current page only
+            $currentPageSummary = [ // Summary for current page only
+                'total_quantity' => 0,
+                'total_value' => 0,
+                'total_purchased' => 0,
+                'total_sold' => 0,
+                'total_items' => 0,
+            ];
+            
+            foreach ($rows as $r) {
+                $stockQty = $r['final_quantity'] ?? 0;
+                $unitPrice = $r['sales_price'] ?? ($r['purchase_price'] ?? 0);
+                
+                $item = [
+                    'DT_RowId' => 'row_' . ($r['stock_id'] ?? uniqid()),
+                    'stock_id' => $r['stock_id'] ?? null,
+                    'product_material_name' => $r['product_material_name'] ?? ($r['product_name'] ?? 'N/A'),
+                    'article' => $r['article'] ?? '',
+                    'barcode' => $r['barcode'] ?? '',
+                    'foot_ware_categories_name' => $r['foot_ware_categories_name'] ?? '',
+                    'type_name' => $r['type_name'] ?? '',
+                    'material_type_name' => $r['material_type_name'] ?? '',
+                    'brand_type_name' => $r['brand_type_name'] ?? '',
+                    'colors_name' => $r['colors_name'] ?? '',
+                    'size_name' => $r['size_name'] ?? '',
+                    'total_purchased_quantity' => $r['total_purchased_quantity'] ?? 0,
+                    'total_sold_quantity' => $r['total_sold_quantity'] ?? 0,
+                    'final_quantity' => $stockQty,
+                    'purchase_price' => $r['purchase_price'] ?? 0,
+                    'sales_price' => $unitPrice,
+                    'total_value' => $stockQty * $unitPrice,
+                    'sync_status' => $r['sync_status'] ?? null,
+                    'updated_at' => $r['updated_at'] ?? null,
+                ];
+                
+                // Apply local filters
+                $passesFilter = true;
+                
+                if ($categoryFilter && $item['foot_ware_categories_name'] != $categoryFilter) {
+                    $passesFilter = false;
+                }
+                
+                if ($typeFilter && $item['type_name'] != $typeFilter) {
+                    $passesFilter = false;
+                }
+                
+                if ($stockStatusFilter) {
+                    switch ($stockStatusFilter) {
+                        case 'in_stock':
+                            if ($stockQty <= 0) $passesFilter = false;
+                            break;
+                        case 'low_stock':
+                            if ($stockQty >= 10 || $stockQty <= 0) $passesFilter = false;
+                            break;
+                        case 'out_of_stock':
+                            if ($stockQty > 0) $passesFilter = false;
+                            break;
+                    }
+                }
+                
+                if ($passesFilter) {
+                    $transformed[] = $item;
+                    $currentPageData[] = $item;
+                    
+                    // Calculate current page summary
+                    $currentPageSummary['total_quantity'] += $stockQty;
+                    $currentPageSummary['total_value'] += ($stockQty * $unitPrice);
+                    $currentPageSummary['total_purchased'] += $r['total_purchased_quantity'] ?? 0;
+                    $currentPageSummary['total_sold'] += $r['total_sold_quantity'] ?? 0;
+                }
+            }
+            
+            $currentPageSummary['total_items'] = count($currentPageData);
+
+            $payload = [
+                'draw' => $draw,
                 'recordsTotal' => $total,
-                'recordsFiltered' => $total,
-                'data' => $rows,
-                'current_page' => (int)($pageData['current_page'] ?? $page),
-                'last_page' => (int)($pageData['last_page'] ?? ceil($total / max(1,(int)$pageData['per_page'] ?? $length))),
+                'recordsFiltered' => count($transformed),
+                'data' => $transformed,
+                'all_data_summary' => $allDataSummary, // For top cards (ALL data)
+                'current_page_summary' => $currentPageSummary, // For footer (CURRENT page only)
+                'pagination' => [
+                    'current_page' => $currentPage,
+                    'per_page' => $perPage,
+                    'total' => $total,
+                    'last_page' => $lastPage,
+                ]
+            ];
+
+            Log::info('==== getStockData END ====', [
+                'returned_rows' => count($transformed),
+                'all_data_items' => $total,
+                'current_page_items' => count($currentPageData),
+                'all_data_summary' => $allDataSummary,
+                'current_page_summary' => $currentPageSummary
             ]);
 
+            return response()->json($payload, 200);
+
         } catch (\Throwable $e) {
-            Log::error('Stock data fetch error: ' . $e->getMessage());
+            Log::error('Stock data fetch error', ['msg' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return response()->json([
-                'draw' => (int)$request->input('draw', 0),
+                'draw' => $draw ?? 1,
                 'recordsTotal' => 0,
                 'recordsFiltered' => 0,
                 'data' => [],
-                'error' => 'Server error'
-            ]);
+                'error' => 'Server error: ' . $e->getMessage()
+            ], 500);
         }
     }
 
-
     /**
-     * Export stock data as CSV
+     * Export stock data as CSV - Updated to match new requirements
      */
     public function exportCsv(Request $request, Store $store)
     {
@@ -166,7 +287,7 @@ class StockDataController extends Controller
             ->first();
 
         if (!$route || !$route->base_url) {
-            abort(404, 'Store route not configured');
+            abort(404, 'Stock data endpoint not configured');
         }
 
         // Get API token
@@ -179,51 +300,134 @@ class StockDataController extends Controller
             $token = Crypt::decryptString($tokenRow->token);
             $posUrl = rtrim($route->base_url, '/') . '/' . ltrim($route->endpoint, '/');
             
-            // Fetch all data (you might want to implement pagination for large exports)
-            $query = [
-                'per_page' => 5000, // Adjust based on your needs
-                'store_id' => $store->id,
+            // Fetch all data in batches
+            $allData = [];
+            $page = 1;
+            $perPage = 1000;
+            
+            do {
+                $query = [
+                    'page' => $page,
+                    'per_page' => $perPage,
+                ];
+
+                // Add search if present
+                if ($request->has('search') && !empty($request->input('search'))) {
+                    $query['search'] = $request->input('search');
+                }
+
+                $response = Http::withToken($token)
+                    ->timeout(120)
+                    ->acceptJson()
+                    ->get($posUrl, $query);
+
+                if ($response->successful()) {
+                    $data = $response->json();
+                    
+                    if ($data['ok'] ?? false) {
+                        $pageData = $data['data']['data'] ?? [];
+                        $allData = array_merge($allData, $pageData);
+                        
+                        $currentPage = $data['data']['current_page'] ?? $page;
+                        $lastPage = $data['data']['last_page'] ?? 1;
+                        
+                        if ($currentPage >= $lastPage) {
+                            break;
+                        }
+                        
+                        $page++;
+                    } else {
+                        abort(500, 'Failed to fetch data from POS');
+                    }
+                } else {
+                    abort(500, 'POS API request failed');
+                }
+                
+                // Small delay to avoid overwhelming the server
+                sleep(1);
+                
+            } while (true);
+            
+            if (empty($allData)) {
+                abort(404, 'No stock data found');
+            }
+            
+            // Apply local filters if present
+            $filteredData = $allData;
+            
+            if ($request->has('category') && !empty($request->input('category'))) {
+                $category = $request->input('category');
+                $filteredData = array_filter($filteredData, function($item) use ($category) {
+                    return ($item['foot_ware_categories_name'] ?? '') == $category;
+                });
+            }
+            
+            if ($request->has('type') && !empty($request->input('type'))) {
+                $type = $request->input('type');
+                $filteredData = array_filter($filteredData, function($item) use ($type) {
+                    return ($item['type_name'] ?? '') == $type;
+                });
+            }
+            
+            $filename = 'stock_report_' . $store->name . '_' . date('Y-m-d_H-i-s') . '.csv';
+            
+            $headers = [
+                'Content-Type' => 'text/csv; charset=utf-8',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
             ];
 
-            $response = Http::withToken($token)
-                ->timeout(120)
-                ->acceptJson()
-                ->get($posUrl, $query);
-
-            if ($response->successful()) {
-                $data = $response->json();
+            $callback = function() use ($filteredData) {
+                $file = fopen('php://output', 'w');
                 
-                if ($data['ok'] ?? false) {
-                    $stockData = $data['data']['data'] ?? [];
+                // Add BOM for UTF-8
+                fwrite($file, "\xEF\xBB\xBF");
+                
+                // Add headers
+                fputcsv($file, [
+                    'Product Name',
+                    'Article',
+                    'Barcode',
+                    'Category',
+                    'Type',
+                    'Material',
+                    'Brand',
+                    'Color',
+                    'Size',
+                    'Purchase Quantity',
+                    'Sold Quantity',
+                    'Stock',
+                    'Unit Price',
+                    'Total Value'
+                ]);
+                
+                // Add data
+                foreach ($filteredData as $row) {
+                    $stockQty = $row['final_quantity'] ?? 0;
+                    $unitPrice = $row['sales_price'] ?? 0;
+                    $totalValue = $stockQty * $unitPrice;
                     
-                    $filename = 'stock_data_' . $store->name . '_' . date('Y-m-d') . '.csv';
-                    
-                    $headers = [
-                        'Content-Type' => 'text/csv',
-                        'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-                    ];
-
-                    $callback = function() use ($stockData) {
-                        $file = fopen('php://output', 'w');
-                        
-                        // Add headers
-                        if (!empty($stockData)) {
-                            fputcsv($file, array_keys($stockData[0]));
-                        }
-                        
-                        // Add data
-                        foreach ($stockData as $row) {
-                            fputcsv($file, $row);
-                        }
-                        
-                        fclose($file);
-                    };
-
-                    return response()->stream($callback, 200, $headers);
+                    fputcsv($file, [
+                        $row['product_material_name'] ?? '',
+                        $row['article'] ?? '',
+                        $row['barcode'] ?? '',
+                        $row['foot_ware_categories_name'] ?? '',
+                        $row['type_name'] ?? '',
+                        $row['material_type_name'] ?? '',
+                        $row['brand_type_name'] ?? '',
+                        $row['colors_name'] ?? '',
+                        $row['size_name'] ?? '',
+                        $row['total_purchased_quantity'] ?? 0,
+                        $row['total_sold_quantity'] ?? 0,
+                        $stockQty,
+                        $unitPrice,
+                        $totalValue
+                    ]);
                 }
-            }
+                
+                fclose($file);
+            };
 
-            abort(500, 'Failed to export data');
+            return response()->stream($callback, 200, $headers);
 
         } catch (\Throwable $e) {
             Log::error('Stock data export error: ' . $e->getMessage());

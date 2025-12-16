@@ -13,6 +13,7 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\ProjectTitleController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SalesDataController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StoreController;
 use App\Http\Controllers\StoreProxyController;
@@ -92,6 +93,11 @@ Route::middleware([
 
     Route::get('/store/{store}/stock-table/export', [StockDataController::class, 'exportCsv'])
             ->name('manager.stock-data.export');
+
+    Route::get('/manager/{store}/sales', [SalesDataController::class, 'index'])->name('manager.sales.index');
+    Route::get('/manager/{store}/sales/data', [SalesDataController::class, 'getSalesData'])->name('manager.sales-data.data');
+    Route::get('/manager/{store}/sales/export', [SalesDataController::class, 'exportCsv'])->name('manager.sales-data.export');
+
 
 
     //Notification Route

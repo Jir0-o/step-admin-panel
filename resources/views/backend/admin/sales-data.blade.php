@@ -1,6 +1,6 @@
 @extends('layouts.master')
 
-@section('title', $store->name . ' - Stock Report || Step Shoe POS')
+@section('title', $store->name . ' - Sales Report || Step Shoe POS')
 
 @section('content')
 <div class="container-fluid py-4">
@@ -16,12 +16,12 @@
                                     <i class="ri-arrow-left-line me-1"></i> Back
                                 </a>
                                 <div>
-                                    <h4 class="mb-1">{{ $store->name }} - Stock Report</h4>
+                                    <h4 class="mb-1">{{ $store->name }} - Sales Report</h4>
                                     <div class="d-flex align-items-center">
                                         <span class="badge bg-success me-2">
                                             <i class="ri-check-line me-1"></i> Connected
                                         </span>
-                                        <small class="text-muted">Live data from POS • Updated: <span id="lastUpdateTime">Just now</span></small>
+                                        <small class="text-muted">Live sales data from POS • Updated: <span id="lastUpdateTime">Just now</span></small>
                                     </div>
                                 </div>
                             </div>
@@ -29,9 +29,6 @@
                         <div class="d-flex flex-wrap gap-2">
                             <button id="exportBtn" class="btn btn-success">
                                 <i class="ri-download-line me-1"></i> Export CSV
-                            </button>
-                            <button id="toggleColumnsBtn" class="btn btn-outline-secondary">
-                                <i class="ri-eye-line me-1"></i> Columns
                             </button>
                             <button id="refreshBtn" class="btn btn-primary">
                                 <i class="ri-refresh-line me-1"></i> Refresh
@@ -51,12 +48,12 @@
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0 me-3">
                             <div class="summary-icon bg-primary">
-                                <i class="ri-box-3-line"></i>
+                                <i class="ri-file-list-line"></i>
                             </div>
                         </div>
                         <div class="flex-grow-1">
-                            <h5 class="mb-1" id="totalItems">0</h5>
-                            <p class="text-muted mb-0">Total Items</p>
+                            <h5 class="mb-1" id="totalInvoices">0</h5>
+                            <p class="text-muted mb-0">Total Invoices</p>
                         </div>
                     </div>
                 </div>
@@ -68,12 +65,12 @@
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0 me-3">
                             <div class="summary-icon bg-success">
-                                <i class="ri-stack-line"></i>
+                                <i class="ri-money-dollar-circle-line"></i>
                             </div>
                         </div>
                         <div class="flex-grow-1">
-                            <h5 class="mb-1" id="totalStock">0</h5>
-                            <p class="text-muted mb-0">Total Stock</p>
+                            <h5 class="mb-1" id="totalAmount">৳ 0</h5>
+                            <p class="text-muted mb-0">Total Sales</p>
                         </div>
                     </div>
                 </div>
@@ -85,12 +82,12 @@
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0 me-3">
                             <div class="summary-icon bg-info">
-                                <i class="ri-money-dollar-circle-line"></i>
+                                <i class="ri-hand-coin-line"></i>
                             </div>
                         </div>
                         <div class="flex-grow-1">
-                            <h5 class="mb-1" id="totalValue">৳ 0</h5>
-                            <p class="text-muted mb-0">Total Value</p>
+                            <h5 class="mb-1" id="totalPaid">৳ 0</h5>
+                            <p class="text-muted mb-0">Total Paid</p>
                         </div>
                     </div>
                 </div>
@@ -102,12 +99,12 @@
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0 me-3">
                             <div class="summary-icon bg-warning">
-                                <i class="ri-shopping-cart-line"></i>
+                                <i class="ri-profit-line"></i>
                             </div>
                         </div>
                         <div class="flex-grow-1">
-                            <h5 class="mb-1" id="totalSold">0</h5>
-                            <p class="text-muted mb-0">Total Sold</p>
+                            <h5 class="mb-1" id="totalProfit">৳ 0</h5>
+                            <p class="text-muted mb-0">Total Profit</p>
                         </div>
                     </div>
                 </div>
@@ -121,37 +118,31 @@
             <div class="card">
                 <div class="card-body">
                     <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">From Date</label>
+                            <input type="date" class="form-control" id="fromDate">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">To Date</label>
+                            <input type="date" class="form-control" id="toDate">
+                        </div>
                         <div class="col-md-4">
+                            <label class="form-label">Search</label>
                             <div class="input-group">
                                 <span class="input-group-text">
                                     <i class="ri-search-line"></i>
                                 </span>
                                 <input type="text" class="form-control" id="searchInput" 
-                                       placeholder="Search product, article, barcode, category...">
+                                       placeholder="Search invoice, customer, payment method...">
                                 <button class="btn btn-outline-secondary" type="button" id="clearSearch">
                                     <i class="ri-close-line"></i>
                                 </button>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <select class="form-select" id="categoryFilter">
-                                <option value="">All Categories</option>
-                                <!-- Categories will be populated dynamically -->
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <select class="form-select" id="typeFilter">
-                                <option value="">All Types</option>
-                                <!-- Types will be populated dynamically -->
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <select class="form-select" id="stockStatusFilter">
-                                <option value="">Stock Status</option>
-                                <option value="in_stock">In Stock</option>
-                                <option value="low_stock">Low Stock (< 10)</option>
-                                <option value="out_of_stock">Out of Stock</option>
-                            </select>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-primary w-100" id="applyFilter">
+                                <i class="ri-filter-line me-1"></i> Apply Filter
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -165,7 +156,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">Stock Items</h5>
+                        <h5 class="card-title mb-0">Sales Invoices</h5>
                         <div class="d-flex align-items-center gap-2">
                             <div class="input-group input-group-sm" style="width: 120px;">
                                 <span class="input-group-text">Show</span>
@@ -184,34 +175,32 @@
                     <!-- Table Container -->
                     <div id="tableContainer">
                         <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                            <table class="table table-hover table-bordered mb-0" id="stockTable">
+                            <table class="table table-hover table-bordered mb-0" id="salesTable">
                                 <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
                                     <tr>
                                         <th class="text-center">#</th>
-                                        <th>Product Name</th>
-                                        <th>Barcode</th>
-                                        <th>Category</th>
-                                        <th>Type</th>
-                                        <th>Material</th>
-                                        <th>Brand</th>
-                                        <th>Color</th>
-                                        <th>Size</th>
-                                        <th class="text-end">Purchase</th>
-                                        <th class="text-end">Sold</th>
-                                        <th class="text-end">Stock</th>
-                                        <th class="text-end">Unit Price</th>
-                                        <th class="text-end">Total Value</th>
-                                        <th class="text-center">Status</th>
+                                        <th>Invoice ID</th>
+                                        <th>Date</th>
+                                        <th>Customer</th>
+                                        <th>Payment Method</th>
+                                        <th class="text-end">Total</th>
+                                        <th class="text-end">VAT</th>
+                                        <th class="text-end">Discount</th>
+                                        <th class="text-end">Paid</th>
+                                        <th class="text-end">Due</th>
+                                        <th class="text-end">Profit</th>
+                                        <th>Created By</th>
+                                        <th>Items</th>
                                     </tr>
                                 </thead>
-                                <tbody id="stockTableBody">
+                                <tbody id="salesTableBody">
                                     <!-- Loading placeholder -->
                                     <tr id="loadingRow">
-                                        <td colspan="15" class="text-center py-5">
+                                        <td colspan="13" class="text-center py-5">
                                             <div class="spinner-border text-primary" role="status">
                                                 <span class="visually-hidden">Loading...</span>
                                             </div>
-                                            <p class="mt-2 mb-0 text-muted">Loading stock data...</p>
+                                            <p class="mt-2 mb-0 text-muted">Loading sales data...</p>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -223,7 +212,7 @@
                             <div class="col-md-6">
                                 <div class="d-flex align-items-center">
                                     <span class="text-muted me-3" id="pageInfo">Page 1 of 1</span>
-                                    <span class="text-muted" id="totalInfo">Total: 0 items</span>
+                                    <span class="text-muted" id="totalInfo">Total: 0 invoices</span>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -241,30 +230,39 @@
                         <div class="col-12">
                             <div class="alert alert-light alert-summary">
                                 <div class="row align-items-center">
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
                                         <div class="d-flex align-items-center">
-                                            <i class="ri-database-2-line fs-4 text-primary me-3"></i>
+                                            <i class="ri-file-list-line fs-4 text-primary me-3"></i>
                                             <div>
-                                                <strong id="footerTotalItems">0</strong>
-                                                <p class="mb-0 text-muted small">Total Items</p>
+                                                <strong id="footerTotalInvoices">0</strong>
+                                                <p class="mb-0 text-muted small">Invoices</p>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
                                         <div class="d-flex align-items-center">
-                                            <i class="ri-stack-line fs-4 text-success me-3"></i>
+                                            <i class="ri-money-dollar-circle-line fs-4 text-success me-3"></i>
                                             <div>
-                                                <strong id="footerTotalStock">0</strong>
-                                                <p class="mb-0 text-muted small">Total Stock</p>
+                                                <strong id="footerTotalAmount">৳ 0.00</strong>
+                                                <p class="mb-0 text-muted small">Total Amount</p>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
                                         <div class="d-flex align-items-center">
-                                            <i class="ri-money-dollar-circle-line fs-4 text-info me-3"></i>
+                                            <i class="ri-hand-coin-line fs-4 text-info me-3"></i>
                                             <div>
-                                                <strong id="footerTotalValue">৳ 0.00</strong>
-                                                <p class="mb-0 text-muted small">Total Value</p>
+                                                <strong id="footerTotalPaid">৳ 0.00</strong>
+                                                <p class="mb-0 text-muted small">Paid Amount</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="d-flex align-items-center">
+                                            <i class="ri-profit-line fs-4 text-warning me-3"></i>
+                                            <div>
+                                                <strong id="footerTotalProfit">৳ 0.00</strong>
+                                                <p class="mb-0 text-muted small">Net Profit</p>
                                             </div>
                                         </div>
                                     </div>
@@ -272,56 +270,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Column Toggle Modal -->
-    <div class="modal fade" id="columnsModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-sm">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Show/Hide Columns</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="toggleProduct" checked>
-                        <label class="form-check-label" for="toggleProduct">Product Name</label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="toggleArticle" checked>
-                        <label class="form-check-label" for="toggleArticle">Barcode</label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="toggleCategory" checked>
-                        <label class="form-check-label" for="toggleCategory">Category</label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="toggleType" checked>
-                        <label class="form-check-label" for="toggleType">Type</label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="toggleMaterial" checked>
-                        <label class="form-check-label" for="toggleMaterial">Material</label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="toggleBrand" checked>
-                        <label class="form-check-label" for="toggleBrand">Brand</label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="toggleColor" checked>
-                        <label class="form-check-label" for="toggleColor">Color</label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="toggleSize" checked>
-                        <label class="form-check-label" for="toggleSize">Size</label>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" id="applyColumns">Apply</button>
                 </div>
             </div>
         </div>
@@ -353,7 +301,7 @@
         border-left: 4px solid #0d6efd;
         background: #f8f9fa;
     }
-    #stockTable thead th {
+    #salesTable thead th {
         position: sticky;
         top: 0;
         background: #f8f9fa;
@@ -379,35 +327,16 @@
     .table-responsive::-webkit-scrollbar-thumb:hover {
         background: #495057;
     }
-    .stock-in {
-        background-color: rgba(25, 135, 84, 0.05) !important;
-    }
-    .stock-low {
-        background-color: rgba(255, 193, 7, 0.1) !important;
-    }
-    .stock-out {
-        background-color: rgba(220, 53, 69, 0.05) !important;
-    }
-    .stock-status {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        margin-right: 6px;
-    }
-    .status-in { background-color: #28a745; }
-    .status-low { background-color: #ffc107; }
-    .status-out { background-color: #dc3545; }
-    .column-hidden {
-        display: none !important;
-    }
+    .status-paid { background-color: rgba(25, 135, 84, 0.05) !important; }
+    .status-partial { background-color: rgba(255, 193, 7, 0.1) !important; }
+    .status-unpaid { background-color: rgba(220, 53, 69, 0.05) !important; }
 </style>
 
 <script>
 $(function() {
     const storeId = {{ $store->id }};
-    const apiUrl = '{{ route("manager.stock-data.data", ["store" => $store->id]) }}';
-    const exportUrl = '{{ route("manager.stock-data.export", ["store" => $store->id]) }}';
+    const apiUrl = '{{ route("manager.sales-data.data", ["store" => $store->id]) }}';
+    const exportUrl = '{{ route("manager.sales-data.export", ["store" => $store->id]) }}';
 
     // State
     let currentPage = 1;
@@ -416,24 +345,6 @@ $(function() {
     let totalItems = 0;
     let lastUpdate = new Date();
     let searchTimeout = null;
-    let allCategories = new Set();
-    let allTypes = new Set();
-    let columnVisibility = {
-        product: true,
-        article: true,
-        category: true,
-        type: true,
-        material: true,
-        brand: true,
-        color: true,
-        size: true,
-        purchase: true,
-        sold: true,
-        stock: true,
-        price: true,
-        value: true,
-        status: true
-    };
 
     // UI Helpers
     function formatNumber(num, decimals = 2) {
@@ -467,10 +378,10 @@ $(function() {
     }
 
     // Load Data
-    async function loadStockData(page = 1, showLoading = true) {
+    async function loadSalesData(page = 1, showLoading = true) {
         if (showLoading) {
             $('#loadingRow').show();
-            $('#stockTableBody tr:not(#loadingRow)').hide();
+            $('#salesTableBody tr:not(#loadingRow)').hide();
         }
         
         currentPage = page;
@@ -484,21 +395,19 @@ $(function() {
                 draw: Date.now()
             });
 
+            // Date filters
+            const fromDate = $('#fromDate').val();
+            const toDate = $('#toDate').val();
+            
+            if (fromDate) params.set('from_date', fromDate);
+            if (toDate) params.set('to_date', toDate);
+
             // Search
             const searchVal = $('#searchInput').val().trim();
             if (searchVal) {
                 params.set('search[value]', searchVal);
-                params.set('search_product', searchVal);
+                params.set('search_sales', searchVal);
             }
-
-            // Filters
-            const category = $('#categoryFilter').val();
-            const type = $('#typeFilter').val();
-            const stockStatus = $('#stockStatusFilter').val();
-            
-            if (category) params.set('filter_category', category);
-            if (type) params.set('filter_type', type);
-            if (stockStatus) params.set('filter_status', stockStatus);
 
             const response = await fetch(`${apiUrl}?${params}`, {
                 headers: {
@@ -524,26 +433,20 @@ $(function() {
 
             // Process data
             const apiData = data.data || [];
-            const allDataSummary = data.all_data_summary || {}; // For TOP cards (ALL data)
-            const currentPageSummary = data.current_page_summary || {}; // For FOOTER (current page)
+            const allDataSummary = data.all_data_summary || {};
+            const currentPageSummary = data.current_page_summary || {};
             totalItems = data.recordsFiltered || data.recordsTotal || 0;
             totalPages = data.pagination?.last_page || Math.ceil(totalItems / perPage) || 1;
 
-            // Extract categories and types from data
-            extractCategoriesAndTypes(apiData);
-
             // Update UI
-            renderStockTable(apiData);
+            renderSalesTable(apiData);
             updatePagination();
             updateSummaryCards(allDataSummary); // TOP cards use ALL data summary
             updateCurrentPageSummary(currentPageSummary); // FOOTER uses current page summary
-            updateFilterOptions();
             updatePageInfo();
 
             // Log performance
-            console.log(`Loaded ${apiData.length || 0} items in ${loadTime}ms`);
-            console.log('All Data Summary:', allDataSummary);
-            console.log('Current Page Summary:', currentPageSummary);
+            console.log(`Loaded ${apiData.length || 0} sales in ${loadTime}ms`);
 
         } catch (error) {
             console.error('Load error:', error);
@@ -553,33 +456,18 @@ $(function() {
         }
     }
 
-    // Extract categories and types from data
-    function extractCategoriesAndTypes(items) {
-        allCategories.clear();
-        allTypes.clear();
-        
-        items.forEach(item => {
-            if (item.foot_ware_categories_name) {
-                allCategories.add(item.foot_ware_categories_name);
-            }
-            if (item.type_name) {
-                allTypes.add(item.type_name);
-            }
-        });
-    }
-
     // Render Table
-    function renderStockTable(items) {
-        const tbody = $('#stockTableBody');
+    function renderSalesTable(items) {
+        const tbody = $('#salesTableBody');
         tbody.empty();
 
         if (!items.length) {
             tbody.html(`
                 <tr>
-                    <td colspan="15" class="text-center py-5">
+                    <td colspan="13" class="text-center py-5">
                         <i class="ri-inbox-line fs-1 text-muted"></i>
-                        <p class="mt-2 mb-0">No stock data found</p>
-                        <small class="text-muted">Try adjusting your search filters</small>
+                        <p class="mt-2 mb-0">No sales data found</p>
+                        <small class="text-muted">Try adjusting your filters</small>
                     </td>
                 </tr>
             `);
@@ -589,46 +477,42 @@ $(function() {
         let rowNumber = (currentPage - 1) * perPage + 1;
 
         items.forEach((item, index) => {
-            const stockQty = parseFloat(item.final_quantity) || 0;
-            const unitPrice = parseFloat(item.sales_price) || 0;
-            const purchased = parseFloat(item.total_purchased_quantity) || 0;
-            const sold = parseFloat(item.total_sold_quantity) || 0;
-            const value = stockQty * unitPrice;
-
-            // Determine status
-            let statusClass = 'stock-in';
-            let statusDot = 'status-in';
-            let statusText = 'In Stock';
+            const dueAmount = parseFloat(item.due_amount) || 0;
+            const paidAmount = parseFloat(item.paid_amount) || 0;
+            const totalAmount = parseFloat(item.total_amount) || 0;
             
-            if (stockQty <= 0) {
-                statusClass = 'stock-out';
-                statusDot = 'status-out';
-                statusText = 'Out of Stock';
-            } else if (stockQty < 10) {
-                statusClass = 'stock-low';
-                statusDot = 'status-low';
-                statusText = 'Low Stock';
+            // Determine status
+            let statusClass = 'status-paid';
+            if (dueAmount > 0 && paidAmount > 0) {
+                statusClass = 'status-partial';
+            } else if (dueAmount > 0 && paidAmount === 0) {
+                statusClass = 'status-unpaid';
             }
 
             const row = `
                 <tr class="${statusClass}">
                     <td class="text-center">${rowNumber++}</td>
-                    <td class="${!columnVisibility.product ? 'column-hidden' : ''}">${escapeHtml(item.product_material_name || '')}</td>
-                    <td class="text-center ${!columnVisibility.article ? 'column-hidden' : ''}">${escapeHtml(item.barcode || '')}</td>
-                    <td class="${!columnVisibility.category ? 'column-hidden' : ''}">${escapeHtml(item.foot_ware_categories_name || '')}</td>
-                    <td class="${!columnVisibility.type ? 'column-hidden' : ''}">${escapeHtml(item.type_name || '')}</td>
-                    <td class="${!columnVisibility.material ? 'column-hidden' : ''}">${escapeHtml(item.material_type_name || '')}</td>
-                    <td class="${!columnVisibility.brand ? 'column-hidden' : ''}">${escapeHtml(item.brand_type_name || '')}</td>
-                    <td class="text-center ${!columnVisibility.color ? 'column-hidden' : ''}">${escapeHtml(item.colors_name || '')}</td>
-                    <td class="text-center ${!columnVisibility.size ? 'column-hidden' : ''}">${escapeHtml(item.size_name || '')}</td>
-                    <td class="text-end ${!columnVisibility.purchase ? 'column-hidden' : ''}">${formatNumber(purchased, 2)}</td>
-                    <td class="text-end ${!columnVisibility.sold ? 'column-hidden' : ''}">${formatNumber(sold, 2)}</td>
-                    <td class="text-end fw-bold ${!columnVisibility.stock ? 'column-hidden' : ''}">${formatNumber(stockQty, 2)}</td>
-                    <td class="text-end ${!columnVisibility.price ? 'column-hidden' : ''}">${formatCurrency(unitPrice)}</td>
-                    <td class="text-end fw-bold ${!columnVisibility.value ? 'column-hidden' : ''}">${formatCurrency(value)}</td>
-                    <td class="text-center ${!columnVisibility.status ? 'column-hidden' : ''}">
-                        <span class="stock-status ${statusDot}"></span>
-                        <small>${statusText}</small>
+                    <td>
+                        <strong>${escapeHtml(item.cart_id || '')}</strong>
+                        ${item.trx_number ? `<br><small class="text-muted">${escapeHtml(item.trx_number)}</small>` : ''}
+                    </td>
+                    <td>${escapeHtml(item.cart_date || '')}</td>
+                    <td>${escapeHtml(item.customer_mobile || '')}</td>
+                    <td>${escapeHtml(item.payment_method || '')}</td>
+                    <td class="text-end fw-bold">${formatCurrency(item.total_amount || 0)}</td>
+                    <td class="text-end">${formatCurrency(item.vat_amount || 0)}</td>
+                    <td class="text-end">${formatCurrency(item.discount || 0)}</td>
+                    <td class="text-end fw-bold text-success">${formatCurrency(item.paid_amount || 0)}</td>
+                    <td class="text-end fw-bold ${dueAmount > 0 ? 'text-danger' : 'text-muted'}">${formatCurrency(dueAmount)}</td>
+                    <td class="text-end fw-bold text-info">${formatCurrency(item.net_profit || 0)}</td>
+                    <td>
+                        ${escapeHtml(item.created_by || '')}
+                        ${item.waiter_name ? `<br><small class="text-muted">Waiter: ${escapeHtml(item.waiter_name)}</small>` : ''}
+                        ${item.table_no ? `<br><small class="text-muted">Table: ${escapeHtml(item.table_no)}</small>` : ''}
+                    </td>
+                    <td>
+                        ${item.items_html || '<small class="text-muted">No items</small>'}
+                        ${item.items_count ? `<br><small class="text-muted">${item.items_count} items</small>` : ''}
                     </td>
                 </tr>
             `;
@@ -684,60 +568,18 @@ $(function() {
 
     // Update Summary Cards (TOP - ALL DATA)
     function updateSummaryCards(summary) {
-        $('#totalItems').text(formatNumber(summary.total_items || 0, 0));
-        $('#totalStock').text(formatNumber(summary.total_quantity || 0, 2));
-        $('#totalValue').text(formatCurrency(summary.total_value || 0));
-        $('#totalSold').text(formatNumber(summary.total_sold || 0, 2));
+        $('#totalInvoices').text(formatNumber(summary.total_items || 0, 0));
+        $('#totalAmount').text(formatCurrency(summary.total_amount || 0));
+        $('#totalPaid').text(formatCurrency(summary.total_paid || 0));
+        $('#totalProfit').text(formatCurrency(summary.total_net_profit || 0));
     }
 
     // Update Current Page Summary (FOOTER - CURRENT PAGE ONLY)
     function updateCurrentPageSummary(summary) {
-        $('#footerTotalItems').text(formatNumber(summary.total_items || 0, 0));
-        $('#footerTotalStock').text(formatNumber(summary.total_quantity || 0, 2));
-        $('#footerTotalValue').text(formatCurrency(summary.total_value || 0));
-    }
-
-    // Update Filter Options
-    function updateFilterOptions() {
-        // Update category filter
-        const categorySelect = $('#categoryFilter');
-        const currentCategory = categorySelect.val();
-        
-        // Store current options except the first one
-        const currentOptions = categorySelect.find('option').slice(1);
-        const currentValues = currentOptions.map((i, opt) => $(opt).val()).get();
-        
-        // Add new categories
-        allCategories.forEach(cat => {
-            if (!currentValues.includes(cat)) {
-                categorySelect.append(`<option value="${cat}">${cat}</option>`);
-            }
-        });
-        
-        // Set back to current value if it exists
-        if (currentCategory && Array.from(allCategories).includes(currentCategory)) {
-            categorySelect.val(currentCategory);
-        }
-        
-        // Update type filter
-        const typeSelect = $('#typeFilter');
-        const currentType = typeSelect.val();
-        
-        // Store current options except the first one
-        const currentTypeOptions = typeSelect.find('option').slice(1);
-        const currentTypeValues = currentTypeOptions.map((i, opt) => $(opt).val()).get();
-        
-        // Add new types
-        allTypes.forEach(type => {
-            if (!currentTypeValues.includes(type)) {
-                typeSelect.append(`<option value="${type}">${type}</option>`);
-            }
-        });
-        
-        // Set back to current value if it exists
-        if (currentType && Array.from(allTypes).includes(currentType)) {
-            typeSelect.val(currentType);
-        }
+        $('#footerTotalInvoices').text(formatNumber(summary.total_items || 0, 0));
+        $('#footerTotalAmount').text(formatCurrency(summary.total_amount || 0));
+        $('#footerTotalPaid').text(formatCurrency(summary.total_paid || 0));
+        $('#footerTotalProfit').text(formatCurrency(summary.total_net_profit || 0));
     }
 
     // Update Page Info
@@ -746,20 +588,20 @@ $(function() {
         const end = Math.min(currentPage * perPage, totalItems);
         
         $('#pageInfo').html(`
-            Showing <strong>${start.toLocaleString()} - ${end.toLocaleString()}</strong> of <strong>${totalItems.toLocaleString()}</strong> items
+            Showing <strong>${start.toLocaleString()} - ${end.toLocaleString()}</strong> of <strong>${totalItems.toLocaleString()}</strong> invoices
         `);
         
-        $('#totalInfo').text(`${totalItems.toLocaleString()} total items`);
+        $('#totalInfo').text(`${totalItems.toLocaleString()} total invoices`);
     }
 
     // Show Error
     function showError(message) {
-        $('#stockTableBody').html(`
+        $('#salesTableBody').html(`
             <tr>
-                <td colspan="15" class="text-center py-5 text-danger">
+                <td colspan="13" class="text-center py-5 text-danger">
                     <i class="ri-error-warning-line fs-1"></i>
                     <p class="mt-2 mb-0">${escapeHtml(message)}</p>
-                    <button class="btn btn-sm btn-outline-danger mt-2" onclick="loadStockData(currentPage)">
+                    <button class="btn btn-sm btn-outline-danger mt-2" onclick="loadSalesData(currentPage)">
                         <i class="ri-refresh-line me-1"></i> Retry
                     </button>
                 </td>
@@ -773,25 +615,13 @@ $(function() {
             // Build export URL with current filters
             const params = new URLSearchParams();
             
+            const fromDate = $('#fromDate').val();
+            const toDate = $('#toDate').val();
             const searchVal = $('#searchInput').val().trim();
-            if (searchVal) {
-                params.set('search', searchVal);
-            }
             
-            const category = $('#categoryFilter').val();
-            if (category) {
-                params.set('category', category);
-            }
-            
-            const type = $('#typeFilter').val();
-            if (type) {
-                params.set('type', type);
-            }
-            
-            const stockStatus = $('#stockStatusFilter').val();
-            if (stockStatus) {
-                params.set('status', stockStatus);
-            }
+            if (fromDate) params.set('from_date', fromDate);
+            if (toDate) params.set('to_date', toDate);
+            if (searchVal) params.set('search', searchVal);
             
             const exportUrlWithParams = exportUrl + (params.toString() ? '?' + params.toString() : '');
             
@@ -807,7 +637,7 @@ $(function() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `stock_report_${storeId}_${new Date().toISOString().slice(0,10)}.csv`;
+            a.download = `sales_report_${storeId}_${new Date().toISOString().slice(0,10)}.csv`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -833,109 +663,61 @@ $(function() {
         }
     }
 
-    // Apply Column Visibility
-    function applyColumnVisibility() {
-        columnVisibility = {
-            product: $('#toggleProduct').is(':checked'),
-            article: $('#toggleArticle').is(':checked'),
-            category: $('#toggleCategory').is(':checked'),
-            type: $('#toggleType').is(':checked'),
-            material: $('#toggleMaterial').is(':checked'),
-            brand: $('#toggleBrand').is(':checked'),
-            color: $('#toggleColor').is(':checked'),
-            size: $('#toggleSize').is(':checked'),
-            purchase: true,
-            sold: true,
-            stock: true,
-            price: true,
-            value: true,
-            status: true
-        };
-        
-        // Re-render table to apply visibility
-        loadStockData(currentPage, false);
-    }
-
     // Event Listeners
     $('#searchInput').on('input', function() {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
-            loadStockData(1);
+            loadSalesData(1);
         }, 500);
     });
 
     $('#clearSearch').on('click', function() {
         $('#searchInput').val('');
-        loadStockData(1);
+        loadSalesData(1);
     });
 
-    $('#categoryFilter, #typeFilter, #stockStatusFilter').on('change', function() {
-        loadStockData(1);
+    $('#applyFilter').on('click', function() {
+        loadSalesData(1);
     });
 
     $('#perPageSelect').on('change', function() {
         perPage = parseInt($(this).val());
-        loadStockData(1);
+        loadSalesData(1);
     });
 
     $('#refreshBtn').on('click', function() {
         $(this).prop('disabled', true);
-        loadStockData(1).finally(() => {
+        loadSalesData(1).finally(() => {
             $(this).prop('disabled', false);
         });
     });
 
     $('#exportBtn').on('click', exportData);
 
-    $('#toggleColumnsBtn').on('click', function() {
-        // Set checkbox states
-        $('#toggleProduct').prop('checked', columnVisibility.product);
-        $('#toggleArticle').prop('checked', columnVisibility.article);
-        $('#toggleCategory').prop('checked', columnVisibility.category);
-        $('#toggleType').prop('checked', columnVisibility.type);
-        $('#toggleMaterial').prop('checked', columnVisibility.material);
-        $('#toggleBrand').prop('checked', columnVisibility.brand);
-        $('#toggleColor').prop('checked', columnVisibility.color);
-        $('#toggleSize').prop('checked', columnVisibility.size);
-        
-        $('#columnsModal').modal('show');
-    });
-
-    $('#applyColumns').on('click', function() {
-        applyColumnVisibility();
-        $('#columnsModal').modal('hide');
-    });
-
     $(document).on('click', '.page-link', function(e) {
         e.preventDefault();
         const page = parseInt($(this).data('page'));
         if (page && page >= 1 && page <= totalPages) {
-            loadStockData(page);
+            loadSalesData(page);
         }
     });
 
-    // Keyboard shortcuts
-    $(document).on('keydown', function(e) {
-        if (e.ctrlKey && e.key === 'r') {
-            e.preventDefault();
-            loadStockData(currentPage);
-        }
-        if (e.ctrlKey && e.key === 'e') {
-            e.preventDefault();
-            exportData();
-        }
-        if (e.key === 'Escape') {
-            $('#searchInput').val('').trigger('input');
-        }
-    });
+    // Set default dates (last 30 days)
+    const today = new Date().toISOString().split('T')[0];
+    const lastMonth = new Date();
+    lastMonth.setDate(lastMonth.getDate() - 30);
+    const lastMonthStr = lastMonth.toISOString().split('T')[0];
+    
+    $('#toDate').val(today);
+    $('#fromDate').val(lastMonthStr);
 
     // Initialize
-    loadStockData(1);
+    loadSalesData(1);
     
     // Auto-refresh every 5 minutes
     setInterval(() => {
         if (document.visibilityState === 'visible') {
-            loadStockData(currentPage, false);
+            loadSalesData(currentPage, false);
         }
     }, 5 * 60 * 1000);
 

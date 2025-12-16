@@ -107,7 +107,8 @@
 <script>
 window.ROUTES = {
     storeSummary: "{{ route('stores.fetch-summary', ['store' => '__ID__']) }}",
-    storeStockTable: "{{ route('manager.stock-data.index', ['store' => '__ID__']) }}"
+    storeStockTable: "{{ route('manager.stock-data.index', ['store' => '__ID__']) }}",
+    storeSalesTable: "{{ route('manager.sales.index', ['store' => '__ID__']) }}"
 };
 </script>
 
@@ -431,6 +432,10 @@ $(function () {
                             <a href="${window.ROUTES.storeStockTable.replace('__ID__', store.id)}" 
                             class="btn btn-info px-2 py-1">
                                 <i class="ri-table-line"></i> Stock Data
+                            </a>
+                            <a href="${window.ROUTES.storeSalesTable.replace('__ID__', store.id)}" 
+                            class="btn btn-info px-2 py-1">
+                                <i class="ri-table-line"></i> Sales Data
                             </a>
                         </td>
                     </tr>
