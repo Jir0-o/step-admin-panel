@@ -7,6 +7,7 @@ use App\Models\Store;
 use App\Models\StoreRoute;
 use App\Models\StoreToken;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
@@ -38,7 +39,9 @@ class SalesDataController extends Controller
             return response()->json(['ok' => false, 'message' => 'Sales data endpoint not configured for this store'], 400);
         }
 
-        $tokenRow = StoreToken::where('store_id', $store->id)->latest('created_at')->first();
+        $tokenRow = StoreToken::where('store_id', $store->id)
+            ->where('user_id', Auth::id())
+            ->latest('created_at')->first();
         if (!$tokenRow || empty($tokenRow->token)) {
             Log::warning('No token for store', ['store_id' => $store->id]);
             return response()->json(['ok' => false, 'message' => 'No API token available'], 401);

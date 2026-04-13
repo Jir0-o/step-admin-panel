@@ -27,6 +27,7 @@ Route::post('/activity', [ActivityController::class, 'store']);
 Route::get('/discount-requests', [DiscountRequestController::class, 'index']);
 Route::get('/discount-requests/{id}', [DiscountRequestController::class, 'show']);
 Route::patch('/discount-requests/{id}/approve', [DiscountRequestController::class, 'approve']);
+Route::delete('/discount-requests/{id}/delete', [DiscountRequestController::class, 'destroy']);
 Route::patch('/discount-requests/{id}/reject', [DiscountRequestController::class, 'reject']);
 Route::post('/discount-requests', [DiscountRequestController::class,'store']);
 Route::get('/discount-requests/status/{tempCartId}', [DiscountRequestController::class,'statusByTempCart']);
