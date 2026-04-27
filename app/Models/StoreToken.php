@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Model;
 
 class StoreToken extends Model
 {
     protected $table = 'store_tokens';
 
-    public $timestamps = false; 
+    public $timestamps = false;
 
     protected $fillable = [
         'store_id',
@@ -23,6 +23,7 @@ class StoreToken extends Model
     protected $casts = [
         'expires_at' => 'datetime',
         'meta' => 'array',
+        'created_at' => 'datetime',
     ];
 
     public function isNearExpiry(int $thresholdSeconds = 300): bool

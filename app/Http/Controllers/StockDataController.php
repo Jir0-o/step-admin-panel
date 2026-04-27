@@ -5,14 +5,16 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Store;
 use App\Models\StoreRoute;
-use App\Models\StoreToken;
+use App\Services\StoreTokenService;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class StockDataController extends Controller
 {
+    public function __construct(private readonly StoreTokenService $tokenService)
+    {
+    }
+
     /**
      * Display stock data page
      */
@@ -38,16 +40,7 @@ class StockDataController extends Controller
             return response()->json(['ok' => false, 'message' => 'Stock data endpoint not configured for this store'], 400);
         }
 
-        $tokenRow = StoreToken::where('store_id', $store->id)
-            ->where('user_id', Auth::id())
-            ->latest('created_at')->first();
-        if (!$tokenRow || empty($tokenRow->token)) {
-            Log::warning('No token for store', ['store_id' => $store->id]);
-            return response()->json(['ok' => false, 'message' => 'No API token available'], 401);
-        }
-
         try {
-            $token = Crypt::decryptString($tokenRow->token);
             $posUrl = rtrim($route->base_url, '/') . '/' . ltrim($route->endpoint, '/');
 
             Log::info('Calling POS', ['pos_url' => $posUrl]);
@@ -101,10 +94,16 @@ class StockDataController extends Controller
             Log::info('POS query params', ['query' => $query]);
 
             // Make API call to POS for paginated data
-            $response = Http::withToken($token)
-                ->timeout(60)
-                ->acceptJson()
-                ->get($posUrl, array_filter($query));
+            $response = $this->tokenService->sendAuthorized(
+                $store,
+                (int) Auth::id(),
+                'GET',
+                $posUrl,
+                [
+                    'timeout' => 60,
+                    'query' => array_filter($query),
+                ]
+            );
 
             Log::info('POS HTTP status', ['status' => $response->status()]);
 
@@ -283,109 +282,92 @@ class StockDataController extends Controller
      */
     public function exportCsv(Request $request, Store $store)
     {
-        // Get active route
         $route = StoreRoute::where('store_id', $store->id)
             ->where('endpoint', 'api/manager/data/final-stock-data')
             ->where('is_active', true)
             ->first();
 
-        if (!$route || !$route->base_url) {
+        if (! $route || ! $route->base_url) {
             abort(404, 'Stock data endpoint not configured');
         }
 
-        // Get API token
-        $tokenRow = StoreToken::where('store_id', $store->id)->latest('created_at')->first();
-        if (!$tokenRow || empty($tokenRow->token)) {
-            abort(401, 'No API token available');
-        }
-
         try {
-            $token = Crypt::decryptString($tokenRow->token);
             $posUrl = rtrim($route->base_url, '/') . '/' . ltrim($route->endpoint, '/');
-            
-            // Fetch all data in batches
             $allData = [];
             $page = 1;
             $perPage = 1000;
-            
+
             do {
                 $query = [
                     'page' => $page,
                     'per_page' => $perPage,
                 ];
 
-                // Add search if present
-                if ($request->has('search') && !empty($request->input('search'))) {
+                if ($request->filled('search')) {
                     $query['search'] = $request->input('search');
                 }
 
-                $response = Http::withToken($token)
-                    ->timeout(120)
-                    ->acceptJson()
-                    ->get($posUrl, $query);
+                $response = $this->tokenService->sendAuthorized(
+                    $store,
+                    (int) Auth::id(),
+                    'GET',
+                    $posUrl,
+                    [
+                        'timeout' => 120,
+                        'query' => $query,
+                    ]
+                );
 
-                if ($response->successful()) {
-                    $data = $response->json();
-                    
-                    if ($data['ok'] ?? false) {
-                        $pageData = $data['data']['data'] ?? [];
-                        $allData = array_merge($allData, $pageData);
-                        
-                        $currentPage = $data['data']['current_page'] ?? $page;
-                        $lastPage = $data['data']['last_page'] ?? 1;
-                        
-                        if ($currentPage >= $lastPage) {
-                            break;
-                        }
-                        
-                        $page++;
-                    } else {
-                        abort(500, 'Failed to fetch data from POS');
-                    }
-                } else {
+                if (! $response->successful()) {
                     abort(500, 'POS API request failed');
                 }
-                
-                // Small delay to avoid overwhelming the server
-                sleep(1);
-                
+
+                $data = $response->json();
+
+                if (! ($data['ok'] ?? false)) {
+                    abort(500, 'Failed to fetch data from POS');
+                }
+
+                $pageData = $data['data']['data'] ?? [];
+                $allData = array_merge($allData, $pageData);
+
+                $currentPage = $data['data']['current_page'] ?? $page;
+                $lastPage = $data['data']['last_page'] ?? 1;
+
+                if ($currentPage >= $lastPage) {
+                    break;
+                }
+
+                $page++;
             } while (true);
-            
+
             if (empty($allData)) {
                 abort(404, 'No stock data found');
             }
-            
-            // Apply local filters if present
+
             $filteredData = $allData;
-            
-            if ($request->has('category') && !empty($request->input('category'))) {
+
+            if ($request->filled('category')) {
                 $category = $request->input('category');
-                $filteredData = array_filter($filteredData, function($item) use ($category) {
-                    return ($item['foot_ware_categories_name'] ?? '') == $category;
-                });
+                $filteredData = array_filter($filteredData, fn ($item) => ($item['foot_ware_categories_name'] ?? '') == $category);
             }
-            
-            if ($request->has('type') && !empty($request->input('type'))) {
+
+            if ($request->filled('type')) {
                 $type = $request->input('type');
-                $filteredData = array_filter($filteredData, function($item) use ($type) {
-                    return ($item['type_name'] ?? '') == $type;
-                });
+                $filteredData = array_filter($filteredData, fn ($item) => ($item['type_name'] ?? '') == $type);
             }
-            
+
             $filename = 'stock_report_' . $store->name . '_' . date('Y-m-d_H-i-s') . '.csv';
-            
+
             $headers = [
                 'Content-Type' => 'text/csv; charset=utf-8',
                 'Content-Disposition' => 'attachment; filename="' . $filename . '"',
             ];
 
-            $callback = function() use ($filteredData) {
+            $callback = function () use ($filteredData) {
                 $file = fopen('php://output', 'w');
-                
-                // Add BOM for UTF-8
                 fwrite($file, "\xEF\xBB\xBF");
-                
-                // Add headers
+
                 fputcsv($file, [
                     'Product Name',
                     'Article',
@@ -400,15 +382,13 @@ class StockDataController extends Controller
                     'Sold Quantity',
                     'Stock',
                     'Unit Price',
-                    'Total Value'
+                    'Total Value',
                 ]);
-                
-                // Add data
+
                 foreach ($filteredData as $row) {
                     $stockQty = $row['final_quantity'] ?? 0;
                     $unitPrice = $row['sales_price'] ?? 0;
-                    $totalValue = $stockQty * $unitPrice;
-                    
+
                     fputcsv($file, [
                         $row['product_material_name'] ?? '',
                         $row['article'] ?? '',
@@ -423,15 +403,14 @@ class StockDataController extends Controller
                         $row['total_sold_quantity'] ?? 0,
                         $stockQty,
                         $unitPrice,
-                        $totalValue
+                        $stockQty * $unitPrice,
                     ]);
                 }
-                
+
                 fclose($file);
             };
 
             return response()->stream($callback, 200, $headers);
-
         } catch (\Throwable $e) {
             Log::error('Stock data export error: ' . $e->getMessage());
             abort(500, 'Export failed: ' . $e->getMessage());

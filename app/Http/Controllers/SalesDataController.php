@@ -2,18 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
 use App\Models\Store;
 use App\Models\StoreRoute;
-use App\Models\StoreToken;
-use Illuminate\Http\Request;
+use App\Services\StoreTokenService;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 
 class SalesDataController extends Controller
 {
+    public function __construct(private readonly StoreTokenService $tokenService)
+    {
+    }
+
     /**
      * Display sales report page
      */
@@ -23,11 +24,14 @@ class SalesDataController extends Controller
     }
 
     /**
-     * Get sales data from POS
+     * Get sales data via AJAX for DataTable
      */
     public function getSalesData(Request $request, Store $store)
     {
-        Log::info('==== getSalesData START ====', ['store_id' => $store->id, 'request' => $request->all()]);
+        Log::info('==== getSalesData START ====', [
+            'store_id' => $store->id,
+            'request' => $request->all(),
+        ]);
 
         $route = StoreRoute::where('store_id', $store->id)
             ->where('endpoint', 'api/manager/data/sales-data')
@@ -36,57 +40,63 @@ class SalesDataController extends Controller
 
         if (!$route || !$route->base_url) {
             Log::warning('Sales endpoint not configured', ['store_id' => $store->id]);
-            return response()->json(['ok' => false, 'message' => 'Sales data endpoint not configured for this store'], 400);
-        }
 
-        $tokenRow = StoreToken::where('store_id', $store->id)
-            ->where('user_id', Auth::id())
-            ->latest('created_at')->first();
-        if (!$tokenRow || empty($tokenRow->token)) {
-            Log::warning('No token for store', ['store_id' => $store->id]);
-            return response()->json(['ok' => false, 'message' => 'No API token available'], 401);
+            return response()->json([
+                'ok' => false,
+                'message' => 'Sales data endpoint not configured for this store',
+            ], 400);
         }
 
         try {
-            $token = Crypt::decryptString($tokenRow->token);
-            $posUrl = rtrim($route->base_url, '/') . '/' . ltrim($route->endpoint, '/');
+            // Build POS URL same style as stock controller
+            $baseUrl = rtrim($route->base_url, '/');
+            $endpoint = ltrim($route->endpoint, '/');
 
-            Log::info('Calling POS for sales data', ['pos_url' => $posUrl]);
+            if (
+                str_contains($baseUrl, '/api/manager/data/sales-data') ||
+                str_ends_with($baseUrl, '/sales-data')
+            ) {
+                $posUrl = $baseUrl;
+            } else {
+                $posUrl = $baseUrl . '/' . $endpoint;
+            }
 
-            // Get request parameters
-            $start = max(0, (int)$request->input('start', 0));
-            $length = max(1, (int)$request->input('length', 100));
-            $draw = (int)$request->input('draw', 1);
+            Log::info('Calling POS sales API', [
+                'store_id' => $store->id,
+                'pos_url' => $posUrl,
+            ]);
+
+            $start = max(0, (int) $request->input('start', 0));
+            $length = max(1, (int) $request->input('length', 100));
+            $draw = (int) $request->input('draw', 1);
             $page = (int) floor($start / $length) + 1;
 
-            // Build query for POS API
             $query = [
-                'page'     => $page,
+                'page' => $page,
                 'per_page' => $length,
             ];
 
             // Date filters
-            if ($request->has('from_date') && !empty($request->input('from_date'))) {
+            if ($request->filled('from_date')) {
                 $query['from_date'] = $request->input('from_date');
             }
-            
-            if ($request->has('to_date') && !empty($request->input('to_date'))) {
+
+            if ($request->filled('to_date')) {
                 $query['to_date'] = $request->input('to_date');
             }
 
-            // Handle search
-            if ($request->has('search.value') && !empty($request->input('search.value'))) {
+            // Search
+            if ($request->filled('search.value')) {
                 $query['search'] = $request->input('search.value');
-            } elseif ($request->has('search_sales') && !empty($request->input('search_sales'))) {
+            } elseif ($request->filled('search_sales')) {
                 $query['search'] = $request->input('search_sales');
             }
 
-            // Handle ordering
+            // Ordering
             if ($request->has('order.0.column') && $request->has('order.0.dir')) {
-                $columnIndex = (int)$request->input('order.0.column');
+                $columnIndex = (int) $request->input('order.0.column');
                 $orderDir = $request->input('order.0.dir', 'desc');
-                
-                // Map DataTables column index to actual database columns
+
                 $columnMap = [
                     0  => 'cart_id',
                     1  => 'cart_date',
@@ -94,7 +104,7 @@ class SalesDataController extends Controller
                     3  => 'payment_method',
                     4  => 'total_amount',
                     5  => 'vat_amount',
-                    6  => 'discount',
+                    6  => 'total_discount',
                     7  => 'paid_amount',
                     8  => 'due_amount',
                     9  => 'gross_profit',
@@ -102,48 +112,70 @@ class SalesDataController extends Controller
                     11 => 'created_by',
                     12 => 'waiter_name',
                 ];
-                
+
                 if (isset($columnMap[$columnIndex])) {
                     $query['order_by'] = $columnMap[$columnIndex];
-                    $query['order_dir'] = in_array(strtolower($orderDir), ['asc','desc']) ? $orderDir : 'desc';
+                    $query['order_dir'] = in_array(strtolower($orderDir), ['asc', 'desc']) ? $orderDir : 'desc';
                 }
             }
 
-            Log::info('POS sales query params', ['query' => $query]);
+            Log::info('POS sales query params', [
+                'store_id' => $store->id,
+                'query' => $query,
+            ]);
 
-            // Make API call to POS
-            $response = Http::withToken($token)
-                ->timeout(60)
-                ->acceptJson()
-                ->get($posUrl, array_filter($query));
+            $response = $this->tokenService->sendAuthorized(
+                $store,
+                (int) Auth::id(),
+                'GET',
+                $posUrl,
+                [
+                    'timeout' => 90,
+                    'query' => array_filter($query),
+                ]
+            );
 
-            Log::info('POS HTTP status for sales', ['status' => $response->status()]);
+            Log::info('POS sales HTTP status', [
+                'store_id' => $store->id,
+                'status' => $response->status(),
+                'body_preview' => mb_substr($response->body(), 0, 1000),
+            ]);
 
             if (!$response->successful()) {
-                Log::error('POS returned non-success for sales', ['status' => $response->status(), 'body' => $response->body()]);
+                Log::error('POS sales returned non-success', [
+                    'store_id' => $store->id,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'pos_url' => $posUrl,
+                ]);
+
                 return response()->json([
                     'draw' => $draw,
                     'recordsTotal' => 0,
                     'recordsFiltered' => 0,
                     'data' => [],
-                    'error' => 'Failed to fetch sales data from POS: ' . $response->status()
+                    'error' => 'Failed to fetch sales data from POS: ' . $response->status(),
+                    'upstream_body' => mb_substr($response->body(), 0, 1000),
                 ], 502);
             }
 
             $body = $response->json();
-            
+
             if (!isset($body['ok']) || $body['ok'] !== true) {
-                Log::warning('POS returned ok:false for sales', ['body' => $body]);
+                Log::warning('POS sales returned ok:false', [
+                    'store_id' => $store->id,
+                    'body' => $body,
+                ]);
+
                 return response()->json([
                     'draw' => $draw,
                     'recordsTotal' => 0,
                     'recordsFiltered' => 0,
                     'data' => [],
-                    'error' => $body['message'] ?? 'POS returned error for sales data'
+                    'error' => $body['message'] ?? 'POS returned error',
                 ], 422);
             }
 
-            // Extract data from response
             $pageData = $body['data'] ?? [];
             $rows = $pageData['data'] ?? [];
             $total = (int) ($pageData['total'] ?? 0);
@@ -151,25 +183,73 @@ class SalesDataController extends Controller
             $currentPage = (int) ($pageData['current_page'] ?? $page);
             $lastPage = (int) ($pageData['last_page'] ?? 1);
 
-            // Transform rows for display
+            // Summary for all data from POS response
+            $allDataSummary = [
+                'total_items' => $total,
+                'total_amount' => 0,
+                'total_vat' => 0,
+                'total_discount' => 0,
+                'total_payable_amount' => 0,
+                'final_total_amount' => 0,
+                'total_paid' => 0,
+                'total_due' => 0,
+                'total_gross_profit' => 0,
+                'total_net_profit' => 0,
+                'total_customers' => 0,
+            ];
+
+            if (isset($body['data']['summary'])) {
+                $summaryData = $body['data']['summary'];
+                $allDataSummary = [
+                    'total_items' => $summaryData['total_items'] ?? $total,
+                    'total_amount' => $summaryData['total_amount'] ?? 0,
+                    'total_vat' => $summaryData['total_vat'] ?? 0,
+                    'total_discount' => $summaryData['total_discount'] ?? 0,
+                    'total_payable_amount' => $summaryData['total_payable_amount'] ?? 0,
+                    'final_total_amount' => $summaryData['final_total_amount'] ?? 0,
+                    'total_paid' => $summaryData['total_paid'] ?? 0,
+                    'total_due' => $summaryData['total_due'] ?? 0,
+                    'total_gross_profit' => $summaryData['total_gross_profit'] ?? 0,
+                    'total_net_profit' => $summaryData['total_net_profit'] ?? 0,
+                    'total_customers' => $summaryData['total_customers'] ?? 0,
+                ];
+            }
+
             $transformed = [];
+            $currentPageSummary = [
+                'total_items' => 0,
+                'total_amount' => 0,
+                'total_vat' => 0,
+                'total_discount' => 0,
+                'total_payable_amount' => 0,
+                'final_total_amount' => 0,
+                'total_paid' => 0,
+                'total_due' => 0,
+                'total_gross_profit' => 0,
+                'total_net_profit' => 0,
+            ];
+
             foreach ($rows as $r) {
-                // Format items for display
+                $items = is_array($r['items'] ?? null) ? $r['items'] : [];
                 $itemsText = '';
-                if (!empty($r['items'])) {
-                    $itemCount = count($r['items']);
-                    $displayItems = array_slice($r['items'], 0, 3);
-                    
+
+                if (!empty($items)) {
+                    $itemCount = count($items);
+                    $displayItems = array_slice($items, 0, 3);
+
                     foreach ($displayItems as $item) {
-                        $itemsText .= $item['barcode'] . ' (' . $item['quantity'] . ') ' . $item['brand'] . '<br>';
+                        $barcode = $item['barcode'] ?? '';
+                        $quantity = $item['quantity'] ?? 0;
+                        $brand = $item['brand'] ?? '';
+                        $itemsText .= e($barcode) . ' (' . e((string) $quantity) . ') ' . e($brand) . '<br>';
                     }
-                    
+
                     if ($itemCount > 3) {
                         $itemsText .= '<small class="text-muted">+' . ($itemCount - 3) . ' more items</small>';
                     }
                 }
-                
-                $transformed[] = [
+
+                $item = [
                     'DT_RowId' => 'sale_' . ($r['cart_id'] ?? uniqid()),
                     'cart_id' => $r['cart_id'] ?? null,
                     'trx_number' => $r['trx_number'] ?? '',
@@ -179,6 +259,8 @@ class SalesDataController extends Controller
                     'total_amount' => (float) ($r['total_cart_amount'] ?? 0),
                     'vat_amount' => (float) ($r['vat_amount'] ?? 0),
                     'discount' => (float) ($r['total_discount'] ?? 0),
+                    'total_payable_amount' => (float) ($r['total_payable_amount'] ?? 0),
+                    'final_total_amount' => (float) ($r['final_total_amount'] ?? 0),
                     'paid_amount' => (float) ($r['paid_amount'] ?? 0),
                     'due_amount' => (float) ($r['due_amount'] ?? 0),
                     'gross_profit' => (float) ($r['gross_profit'] ?? 0),
@@ -186,46 +268,65 @@ class SalesDataController extends Controller
                     'created_by' => $r['created_by'] ?? '',
                     'waiter_name' => $r['waiter_name'] ?? '',
                     'table_no' => $r['table_no'] ?? '',
+                    'sales_type' => $r['sales_type'] ?? '',
                     'items_html' => $itemsText,
-                    'items_count' => count($r['items'] ?? []),
+                    'items_count' => count($items),
+                    'items' => $items,
                 ];
-            }
 
-            // Get summaries
-            $allDataSummary = $body['data']['summary'] ?? [];
-            $currentPageSummary = $body['data']['page_summary'] ?? [];
+                $transformed[] = $item;
+
+                $currentPageSummary['total_items']++;
+                $currentPageSummary['total_amount'] += $item['total_amount'];
+                $currentPageSummary['total_vat'] += $item['vat_amount'];
+                $currentPageSummary['total_discount'] += $item['discount'];
+                $currentPageSummary['total_payable_amount'] += $item['total_payable_amount'];
+                $currentPageSummary['final_total_amount'] += $item['final_total_amount'];
+                $currentPageSummary['total_paid'] += $item['paid_amount'];
+                $currentPageSummary['total_due'] += $item['due_amount'];
+                $currentPageSummary['total_gross_profit'] += $item['gross_profit'];
+                $currentPageSummary['total_net_profit'] += $item['net_profit'];
+            }
 
             $payload = [
                 'draw' => $draw,
                 'recordsTotal' => $total,
                 'recordsFiltered' => $total,
                 'data' => $transformed,
-                'all_data_summary' => $allDataSummary, // For TOP cards
-                'current_page_summary' => $currentPageSummary, // For FOOTER
+                'all_data_summary' => $allDataSummary,
+                'current_page_summary' => $body['data']['page_summary'] ?? $currentPageSummary,
                 'pagination' => [
                     'current_page' => $currentPage,
                     'per_page' => $perPage,
                     'total' => $total,
                     'last_page' => $lastPage,
-                ]
+                ],
             ];
 
             Log::info('==== getSalesData END ====', [
+                'store_id' => $store->id,
                 'returned_rows' => count($transformed),
-                'total_items' => $total,
-                'all_data_summary' => $allDataSummary
+                'all_data_items' => $total,
+                'current_page_items' => count($transformed),
+                'all_data_summary' => $allDataSummary,
+                'current_page_summary' => $payload['current_page_summary'],
             ]);
 
             return response()->json($payload, 200);
 
         } catch (\Throwable $e) {
-            Log::error('Sales data fetch error', ['msg' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            Log::error('Sales data fetch error', [
+                'store_id' => $store->id,
+                'msg' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return response()->json([
                 'draw' => $draw ?? 1,
                 'recordsTotal' => 0,
                 'recordsFiltered' => 0,
                 'data' => [],
-                'error' => 'Server error: ' . $e->getMessage()
+                'error' => 'Server error: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -235,56 +336,63 @@ class SalesDataController extends Controller
      */
     public function exportCsv(Request $request, Store $store)
     {
-        // Get active route
         $route = StoreRoute::where('store_id', $store->id)
             ->where('endpoint', 'api/manager/data/export-sales-data')
+            ->where('is_active', true)
             ->first();
 
         if (!$route || !$route->base_url) {
             abort(404, 'Sales data export endpoint not configured');
         }
 
-        // Get API token
-        $tokenRow = StoreToken::where('store_id', $store->id)->latest('created_at')->first();
-        if (!$tokenRow || empty($tokenRow->token)) {
-            abort(401, 'No API token available');
-        }
-
         try {
-            $token = Crypt::decryptString($tokenRow->token);
-            $posUrl = rtrim($route->base_url, '/') . '/' . ltrim($route->endpoint, '/');
-            
-            // Build query with filters
+            $baseUrl = rtrim($route->base_url, '/');
+            $endpoint = ltrim($route->endpoint, '/');
+
+            if (
+                str_contains($baseUrl, '/api/manager/data/export-sales-data') ||
+                str_ends_with($baseUrl, '/export-sales-data')
+            ) {
+                $posUrl = $baseUrl;
+            } else {
+                $posUrl = $baseUrl . '/' . $endpoint;
+            }
+
             $query = [];
-            
-            if ($request->has('from_date') && !empty($request->input('from_date'))) {
+
+            if ($request->filled('from_date')) {
                 $query['from_date'] = $request->input('from_date');
             }
-            
-            if ($request->has('to_date') && !empty($request->input('to_date'))) {
+
+            if ($request->filled('to_date')) {
                 $query['to_date'] = $request->input('to_date');
             }
-            
-            if ($request->has('search') && !empty($request->input('search'))) {
+
+            if ($request->filled('search')) {
                 $query['search'] = $request->input('search');
             }
 
-            $response = Http::withToken($token)
-                ->timeout(120)
-                ->acceptJson()
-                ->get($posUrl, $query);
+            $response = $this->tokenService->sendAuthorized(
+                $store,
+                (int) Auth::id(),
+                'GET',
+                $posUrl,
+                [
+                    'timeout' => 120,
+                    'query' => $query,
+                ]
+            );
 
             if ($response->successful()) {
                 $filename = 'sales_report_' . $store->name . '_' . date('Y-m-d_H-i-s') . '.csv';
-                
+
                 return response($response->body(), 200, [
                     'Content-Type' => 'text/csv; charset=utf-8',
                     'Content-Disposition' => 'attachment; filename="' . $filename . '"',
                 ]);
-            } else {
-                abort(500, 'Failed to fetch export data from POS');
             }
 
+            abort(500, 'Failed to fetch export data from POS');
         } catch (\Throwable $e) {
             Log::error('Sales data export error: ' . $e->getMessage());
             abort(500, 'Export failed: ' . $e->getMessage());

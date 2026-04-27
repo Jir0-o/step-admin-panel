@@ -50,34 +50,30 @@
 
 <script>
   (function () {
+      const csrf = document.querySelector('meta[name="csrf-token"]');
+      if (!csrf) return;
 
-      if (!document.querySelector('meta[name="csrf-token"]')) return;
-
-      const SYNC_INTERVAL = 10 * 60 * 1000; // 2 minutes
+      const SYNC_INTERVAL = 15 * 60 * 1000;
       let isSyncing = false;
+      let lastSyncAt = 0;
 
       function syncStoreTokens() {
-          if (isSyncing) return;
+          if (isSyncing || document.hidden) return;
+
+          const now = Date.now();
+          if (now - lastSyncAt < SYNC_INTERVAL) return;
+
           isSyncing = true;
 
           fetch("{{ route('ajax.sync.store.tokens') }}", {
               method: 'POST',
               headers: {
-                  'X-CSRF-TOKEN': document
-                      .querySelector('meta[name="csrf-token"]')
-                      .getAttribute('content'),
+                  'X-CSRF-TOKEN': csrf.getAttribute('content'),
                   'Accept': 'application/json'
               }
           })
-          .then(res => res.json())
-          .then(data => {
-              if (!data.ok) return;
-
-              if (data.expiring_tokens.length > 0) {
-                  alert(
-                      'Warning: Some store sessions are about to expire. They will refresh automatically.'
-                  );
-              }
+          .then(() => {
+              lastSyncAt = Date.now();
           })
           .catch(err => {
               console.error('Error syncing store tokens:', err);
@@ -87,12 +83,13 @@
           });
       }
 
-      // Initial sync
-      syncStoreTokens();
+      document.addEventListener('visibilitychange', function () {
+          if (!document.hidden) {
+              syncStoreTokens();
+          }
+      });
 
-      // Repeat while user is active
       setInterval(syncStoreTokens, SYNC_INTERVAL);
-
   })();
 </script>
 </body>

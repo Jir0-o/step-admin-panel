@@ -2,15 +2,17 @@
 
 namespace Database\Seeders;
 
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class RolePermissionSeeder extends Seeder
 {
-    public function run()
+    public function run(): void
     {
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $permissions = [
             'view_dashboard',
@@ -29,7 +31,6 @@ class RolePermissionSeeder extends Seeder
             ]);
         }
 
-        // Roles
         $adminRole = Role::firstOrCreate([
             'name' => 'admin',
             'guard_name' => 'web',
@@ -40,20 +41,16 @@ class RolePermissionSeeder extends Seeder
             'guard_name' => 'web',
         ]);
 
-        // Admin permissions
-        $adminRole->syncPermissions([
-            'view_dashboard',
-            'create_stores',
-            'view_route_management',
-            'manage_users',
-            'manage_settings',
-        ]);
-
-        // User permissions
+        $adminRole->syncPermissions(Permission::where('guard_name', 'web')->get());
         $userRole->syncPermissions([
             'view_dashboard',
             'view_store',
             'view_discount',
         ]);
+
+        $firstUser = User::query()->orderBy('id')->first();
+        if ($firstUser && ! $firstUser->hasAnyRole(['admin', 'user'])) {
+            $firstUser->assignRole('admin');
+        }
     }
 }

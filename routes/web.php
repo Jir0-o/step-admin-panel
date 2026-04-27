@@ -32,75 +32,99 @@ Route::get('/', function () {
 
 Route::get('/login', [AuthenticatedSessionController::class, 'create'])->middleware('guest')->name('login');
 Route::post('/login', [AuthenticatedSessionController::class, 'store'])->middleware('guest');
-
-// Logout
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
-
-
-
 
 Route::middleware([
     'auth:sanctum',
     config('jetstream.auth_session'),
     'verified',
 ])->group(function () {
+    Route::get('/dashboard/overview', [DashboardController::class, 'overview'])
+        ->middleware('permission:view_dashboard')
+        ->name('dashboard.overview');
 
-    Route::view('/store',         'backend.admin.store')->name('store.index');
-    Route::view('/discount',      'backend.admin.discount')->name('discount.index');
-    Route::view('/user',          'backend.admin.user')->name('user.index');
+    Route::view('/store', 'backend.admin.store')
+        ->middleware('permission:view_store')
+        ->name('store.index');
 
-    Route::middleware(['auth'])
-    ->prefix('admin')
-    ->name('admin.')
-    ->group(function () {
-        Route::get('/roles-permissions', [RolePermissionController::class, 'index'])->name('roles-permissions.index');
+    Route::view('/discount', 'backend.admin.discount')
+        ->middleware('permission:view_discount')
+        ->name('discount.index');
 
-        // Roles CRUD
-        Route::post('/roles', [RolePermissionController::class, 'storeRole'])->name('roles.store');
-        Route::put('/roles/{role}', [RolePermissionController::class, 'updateRole'])->name('roles.update');
-        Route::delete('/roles/{role}', [RolePermissionController::class, 'destroyRole'])->name('roles.destroy');
+    Route::view('/user', 'backend.admin.user')
+        ->middleware('permission:manage_users')
+        ->name('user.index');
 
-        // Permissions CRUD
-        Route::post('/permissions', [RolePermissionController::class, 'storePermission'])->name('permissions.store');
-        Route::put('/permissions/{permission}', [RolePermissionController::class, 'updatePermission'])->name('permissions.update');
-        Route::delete('/permissions/{permission}', [RolePermissionController::class, 'destroyPermission'])->name('permissions.destroy');
+    Route::prefix('admin')
+        ->name('admin.')
+        ->middleware('permission:manage_settings')
+        ->group(function () {
+            Route::get('/roles-permissions', [RolePermissionController::class, 'index'])->name('roles-permissions.index');
+            Route::post('/roles', [RolePermissionController::class, 'storeRole'])->name('roles.store');
+            Route::put('/roles/{role}', [RolePermissionController::class, 'updateRole'])->name('roles.update');
+            Route::delete('/roles/{role}', [RolePermissionController::class, 'destroyRole'])->name('roles.destroy');
+            Route::post('/permissions', [RolePermissionController::class, 'storePermission'])->name('permissions.store');
+            Route::put('/permissions/{permission}', [RolePermissionController::class, 'updatePermission'])->name('permissions.update');
+            Route::delete('/permissions/{permission}', [RolePermissionController::class, 'destroyPermission'])->name('permissions.destroy');
+            Route::put('/roles/{role}/permissions', [RolePermissionController::class, 'syncRolePermissions'])->name('roles.permissions.sync');
+        });
 
-        // Attach / detach permissions to role
-        Route::put('/roles/{role}/permissions', [RolePermissionController::class, 'syncRolePermissions'])->name('roles.permissions.sync');
-    });
+    Route::resource('dashboard', DashboardController::class)
+        ->only(['index'])
+        ->middleware('permission:view_dashboard');
 
-    Route::resource('dashboard', DashboardController::class);
-    Route::resource('user', UserController::class);
-    Route::resource('roles', RoleController::class);
-    Route::resource('permission', PermissionController::class);
-    Route::resource('store-routes', StoreRouteController::class);
+    Route::resource('user', UserController::class)
+        ->except(['index'])
+        ->middleware('permission:manage_users');
 
-    Route::resource('stores', StoreController::class);
+    Route::resource('roles', RoleController::class)
+        ->middleware('permission:manage_settings');
 
-    Route::post('/store/sync-store-tokens', [StoreController::class,'sync'])
+    Route::resource('permission', PermissionController::class)
+        ->middleware('permission:manage_settings');
+
+    Route::resource('store-routes', StoreRouteController::class)
+        ->middleware('permission:view_route_management');
+
+    Route::resource('stores', StoreController::class)
+        ->middleware('permission:create_stores');
+
+    Route::post('/store/sync-store-tokens', [StoreController::class, 'sync'])
+        ->middleware('permission:view_store')
         ->name('ajax.sync.store.tokens');
 
+    Route::get('/stores/{store}/fetch-data', [StoreProxyController::class, 'fetchData'])
+        ->middleware('permission:view_store')
+        ->name('stores.fetch-data');
 
-    Route::get('/stores/{store}/fetch-data', [StoreProxyController::class, 'fetchData'])->name('stores.fetch-data');
-    Route::match(['get','post'], '/stores/{store}/fetch-summary', [StoreSummaryProxyController::class, 'fetchSummary'])->name('stores.fetch-summary');
+    Route::match(['get', 'post'], '/stores/{store}/fetch-summary', [StoreSummaryProxyController::class, 'fetchSummary'])
+        ->middleware('permission:view_store')
+        ->name('stores.fetch-summary');
 
     Route::get('/store/{store}/stock-table', [StockDataController::class, 'index'])
+        ->middleware('permission:view_store')
         ->name('manager.stock-data.index');
-        
-    // API route for datatable AJAX
+
     Route::get('/store/{store}/stock-table/data', [StockDataController::class, 'getStockData'])
+        ->middleware('permission:view_store')
         ->name('manager.stock-data.data');
 
     Route::get('/store/{store}/stock-table/export', [StockDataController::class, 'exportCsv'])
-            ->name('manager.stock-data.export');
+        ->middleware('permission:view_store')
+        ->name('manager.stock-data.export');
 
-    Route::get('/manager/{store}/sales', [SalesDataController::class, 'index'])->name('manager.sales.index');
-    Route::get('/manager/{store}/sales/data', [SalesDataController::class, 'getSalesData'])->name('manager.sales-data.data');
-    Route::get('/manager/{store}/sales/export', [SalesDataController::class, 'exportCsv'])->name('manager.sales-data.export');
+    Route::get('/manager/{store}/sales', [SalesDataController::class, 'index'])
+        ->middleware('permission:view_store')
+        ->name('manager.sales.index');
 
+    Route::get('/manager/{store}/sales/data', [SalesDataController::class, 'getSalesData'])
+        ->middleware('permission:view_store')
+        ->name('manager.sales-data.data');
 
+    Route::get('/manager/{store}/sales/export', [SalesDataController::class, 'exportCsv'])
+        ->middleware('permission:view_store')
+        ->name('manager.sales-data.export');
 
-    //Notification Route
     Route::get('/notifications/count', [NotificationController::class, 'notificationCount'])->name('notifications.count');
     Route::delete('/notifications/delete/{id}', [NotificationController::class, 'deleteNotification'])->name('notifications.delete');
     Route::post('/notifications/clear', [NotificationController::class, 'clearNotifications'])->name('notifications.clear');
@@ -108,8 +132,7 @@ Route::middleware([
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.markAllRead');
     Route::post('/notifications/mark-as-read/{id}', [NotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
 
-    //Settings Route
-    Route::get('/settings',[SettingsController::class, 'index'])->name('settings');
-
-    
+    Route::get('/settings', [SettingsController::class, 'index'])
+        ->middleware('permission:manage_settings')
+        ->name('settings');
 });
