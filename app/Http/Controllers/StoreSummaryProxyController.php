@@ -28,7 +28,16 @@ class StoreSummaryProxyController extends Controller
         }
 
         $params = ['tables' => $tables];
-        foreach (['date_from', 'date_to', 'connection'] as $key) {
+        foreach ([
+            'date_from',
+            'date_to',
+            'connection',
+            'year',
+            'month',
+            'salesman_id',
+            'period_type',
+            'status',
+        ] as $key) {
             if ($request->filled($key)) {
                 $params[$key] = $request->input($key);
             }

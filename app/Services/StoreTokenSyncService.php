@@ -8,8 +8,8 @@ class StoreTokenSyncService
     {
     }
 
-    public function syncForUser(int $userId, ?string $fallbackEmail = null, ?string $fallbackPassword = null): array
+    public function syncForUser(int $userId, ?string $fallbackEmail = null, ?string $fallbackPassword = null, bool $forceRefresh = false): array
     {
-        return $this->tokenService->syncForUser($userId, $fallbackEmail, $fallbackPassword);
+        return $this->tokenService->syncForUser($userId, $fallbackEmail, $fallbackPassword, $forceRefresh);
     }
 }

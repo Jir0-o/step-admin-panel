@@ -3,13 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Services\StoreOverviewService;
+use App\Services\StoreTokenSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
-    public function __construct(private readonly StoreOverviewService $storeOverviewService)
-    {
+    public function __construct(
+        private readonly StoreOverviewService $storeOverviewService,
+        private readonly StoreTokenSyncService $storeTokenSyncService
+    ) {
     }
 
     public function index()
@@ -21,7 +24,14 @@ class DashboardController extends Controller
 
     public function overview(): JsonResponse
     {
-        $payload = $this->storeOverviewService->getOverviewForUser((int) Auth::id(), request()->boolean('refresh'));
+        $userId = (int) Auth::id();
+        $forceRefresh = request()->boolean('refresh');
+
+        if ($forceRefresh) {
+            $this->storeTokenSyncService->syncForUser($userId, null, null, true);
+        }
+
+        $payload = $this->storeOverviewService->getOverviewForUser($userId, $forceRefresh);
 
         return response()->json([
             'ok' => true,

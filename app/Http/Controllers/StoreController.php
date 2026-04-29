@@ -159,7 +159,7 @@ class StoreController extends Controller
     ) {
         $userId = auth()->id();
 
-        $results = $service->syncForUser($userId);
+        $results = $service->syncForUser($userId, null, null, true);
 
         $expiring = StoreToken::where('user_id', $userId)
             ->whereNotNull('expires_at')

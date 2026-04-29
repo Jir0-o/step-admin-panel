@@ -34,7 +34,8 @@ class AuthenticatedSessionController extends Controller
         $syncResults = $storeTokenSyncService->syncForUser(
             $user->id,
             $credentials['email'],
-            $credentials['password']
+            $credentials['password'],
+            true
         );
 
         Log::info('Store token sync completed after login.', [

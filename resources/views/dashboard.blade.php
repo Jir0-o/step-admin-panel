@@ -151,6 +151,61 @@
     </div>
 </div>
 
+<div class="modal fade" id="storeTargetsModal" tabindex="-1" aria-labelledby="storeTargetsLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="storeTargetsLabel">Salesman Targets</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <div id="storeTargetsSummaryCards" class="mb-3"></div>
+
+                <h6 class="mb-2">Salesmen Summary</h6>
+                <div class="table-responsive mb-4">
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Salesman</th>
+                                <th class="text-center">Targets</th>
+                                <th class="text-end">Total Target</th>
+                                <th class="text-end">Total Achieved</th>
+                                <th class="text-center">Achievement</th>
+                                <th>Last Target Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="storeTargetsSummaryBody">
+                            <tr><td colspan="6" class="text-center">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h6 class="mb-2">Target Details</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Salesman</th>
+                                <th>Period</th>
+                                <th class="text-end">Target</th>
+                                <th class="text-end">Achieved</th>
+                                <th class="text-center">Sales Count</th>
+                                <th class="text-center">%</th>
+                                <th>Status</th>
+                                <th>Date Range</th>
+                            </tr>
+                        </thead>
+                        <tbody id="storeTargetsDetailsBody">
+                            <tr><td colspan="8" class="text-center">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (() => {
     const overviewUrl = @json(route('dashboard.overview'));
@@ -215,12 +270,161 @@
                     <button class="btn btn-sm btn-success js-view-store" data-store-id="${store.id}" data-store-name="${store.name}">View</button>
                     <a class="btn btn-sm btn-info" href="${stockRoute.replace('__ID__', store.id)}">Stock</a>
                     <a class="btn btn-sm btn-primary" href="${salesRoute.replace('__ID__', store.id)}">Sales</a>
+                    <button
+                        class="btn btn-sm btn-warning js-view-targets"
+                        data-store-id="${store.id}"
+                        data-store-name="${store.name}">
+                        Targets
+                    </button>
                 </td>
             </tr>`;
         }).join('');
 
         $('#dashboard-store-tbody').html(rows || '<tr><td colspan="7" class="text-center py-4">No stores found.</td></tr>');
     }
+
+    function showBootstrapModal(id) {
+        const el = document.getElementById(id);
+
+        if (window.bootstrap && bootstrap.Modal) {
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        } else {
+            $('#' + id).modal('show');
+        }
+    }
+
+    function targetPeriodLabel(row) {
+        if (row.period_type === 'daily') {
+            return row.start_date || '-';
+        }
+
+        if (row.period_type === 'weekly') {
+            return `Week ${row.period_value || '-'}, ${row.year || '-'}`;
+        }
+
+        if (row.period_type === 'monthly') {
+            const monthName = row.period_value
+                ? new Date(row.year || new Date().getFullYear(), Number(row.period_value) - 1, 1).toLocaleString('default', { month: 'long' })
+                : '-';
+
+            return `${monthName}, ${row.year || '-'}`;
+        }
+
+        if (row.period_type === 'yearly') {
+            return `Full Year, ${row.year || '-'}`;
+        }
+
+        return row.period_type || '-';
+    }
+
+    function renderTargetsModal(payload, storeName) {
+        const detail = payload?.salesman_target_details || {};
+        const summaries = detail.summaries || [];
+        const targets = detail.targets || [];
+
+        $('#storeTargetsSummaryCards').html(`
+            <div class="row">
+                <div class="col-md-3 mb-2">
+                    <div class="card border-0 shadow-sm"><div class="card-body text-center">
+                        <small>Salesmen</small>
+                        <h5 class="mb-0">${integer(detail.salesmen_count || 0)}</h5>
+                    </div></div>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <div class="card border-0 shadow-sm"><div class="card-body text-center">
+                        <small>Total Target</small>
+                        <h5 class="mb-0">${taka(detail.total_target || 0)}</h5>
+                    </div></div>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <div class="card border-0 shadow-sm"><div class="card-body text-center">
+                        <small>Total Achieved</small>
+                        <h5 class="mb-0">${taka(detail.total_achieved || 0)}</h5>
+                    </div></div>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <div class="card border-0 shadow-sm"><div class="card-body text-center">
+                        <small>Overall %</small>
+                        <h5 class="mb-0">${Number(detail.overall_percent || 0).toFixed(2)}%</h5>
+                    </div></div>
+                </div>
+            </div>
+        `);
+
+        const summaryHtml = summaries.map((s) => `
+            <tr>
+                <td>
+                    <strong>${s.name || 'N/A'}</strong><br>
+                    <small class="text-muted">${s.office_id || ''}</small>
+                </td>
+                <td class="text-center">${integer(s.targets_count || 0)}</td>
+                <td class="text-end">${taka(s.total_target || 0)}</td>
+                <td class="text-end text-success">${taka(s.total_achieved || 0)}</td>
+                <td class="text-center">${Number(s.percent || 0).toFixed(2)}%</td>
+                <td>${s.last_date || '-'}</td>
+            </tr>
+        `).join('');
+
+        $('#storeTargetsSummaryBody').html(
+            summaryHtml || '<tr><td colspan="6" class="text-center">No salesman target found.</td></tr>'
+        );
+
+        const targetHtml = targets.map((row) => `
+            <tr>
+                <td>
+                    <strong>${row.salesman_name || 'N/A'}</strong><br>
+                    <small class="text-muted">${row.office_id || ''}</small>
+                </td>
+                <td>${targetPeriodLabel(row)}</td>
+                <td class="text-end">${taka(row.target_amount || 0)}</td>
+                <td class="text-end text-success">${taka(row.achieved_amount || 0)}</td>
+                <td class="text-center">${integer(row.sales_count || 0)}</td>
+                <td class="text-center">${Number(row.percent || 0).toFixed(2)}%</td>
+                <td><span class="badge bg-primary">${row.status || '-'}</span></td>
+                <td>
+                    <small>${row.start_date || '-'}<br>to ${row.end_date || '-'}</small>
+                </td>
+            </tr>
+        `).join('');
+
+        $('#storeTargetsDetailsBody').html(
+            targetHtml || '<tr><td colspan="8" class="text-center">No target details found.</td></tr>'
+        );
+    }
+
+    $(document).on('click', '.js-view-targets', function () {
+        const storeId = $(this).data('store-id');
+        const storeName = $(this).data('store-name');
+
+        $('#storeTargetsLabel').text(`${storeName} - Salesman Targets`);
+        $('#storeTargetsSummaryCards').html('');
+        $('#storeTargetsSummaryBody').html('<tr><td colspan="6" class="text-center">Loading...</td></tr>');
+        $('#storeTargetsDetailsBody').html('<tr><td colspan="8" class="text-center">Loading...</td></tr>');
+
+        showBootstrapModal('storeTargetsModal');
+
+        const now = new Date();
+
+        $.ajax({
+            url: summaryRoute.replace('__ID__', storeId),
+            method: 'GET',
+            data: {
+                tables: 'salesman_target_details',
+                year: new Date().getFullYear(),
+                month: new Date().getMonth() + 1
+            },
+            headers: { Accept: 'application/json' },
+        })
+        .done((response) => {
+            const remote = response?.data || {};
+            const results = remote.results || remote.data?.results || {};
+            renderTargetsModal(results, storeName);
+        })
+        .fail(() => {
+            $('#storeTargetsSummaryBody').html('<tr><td colspan="6" class="text-center text-danger">Failed to load target data.</td></tr>');
+            $('#storeTargetsDetailsBody').html('<tr><td colspan="8" class="text-center text-danger">Failed to load target data.</td></tr>');
+        });
+    });
 
     function renderChart(chartRows) {
         const ctx = document.getElementById('storeSalesChart');

@@ -22,7 +22,7 @@ class StoreTokenService
         $this->refreshBeforeSeconds = (int) config('services.store_token.refresh_before_seconds', 300);
     }
 
-    public function syncForUser(int $userId, ?string $fallbackEmail = null, ?string $fallbackPassword = null): array
+    public function syncForUser(int $userId, ?string $fallbackEmail = null, ?string $fallbackPassword = null, bool $forceRefresh = false): array
     {
         $results = [];
 
@@ -41,13 +41,18 @@ class StoreTokenService
             }
 
             try {
-                $this->getValidTokenForUser(
-                    $store,
-                    $userId,
-                    $fallbackEmail,
-                    $fallbackPassword,
-                    false
-                );
+                if ($forceRefresh) {
+                    Cache::forget($this->cacheKey($store->id, $userId));
+                    $this->refreshToken($store, $userId, $credentials['email'], $credentials['password']);
+                } else {
+                    $this->getValidTokenForUser(
+                        $store,
+                        $userId,
+                        $fallbackEmail,
+                        $fallbackPassword,
+                        false
+                    );
+                }
 
                 $results[$store->id] = 'ready';
             } catch (\Throwable $e) {
