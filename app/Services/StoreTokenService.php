@@ -69,6 +69,30 @@ class StoreTokenService
         return $results;
     }
 
+    public function tokenStatusForUser(int $userId, bool $forceRefresh = false): array
+    {
+        $stores = Store::query()
+            ->orderBy('id')
+            ->get(['id', 'name', 'login_api_url']);
+
+        return $stores->map(function (Store $store) use ($userId, $forceRefresh) {
+            $tokenRow = StoreToken::query()
+                ->where('store_id', $store->id)
+                ->where('user_id', $userId)
+                ->latest('created_at')
+                ->first();
+
+            $needsRefresh = $forceRefresh || ! $tokenRow || $tokenRow->isNearExpiry($this->refreshBeforeSeconds);
+
+            return [
+                'id' => $store->id,
+                'name' => $store->name,
+                'needs_refresh' => $needsRefresh,
+                'message' => $needsRefresh ? 'Token expired' : null,
+            ];
+        })->values()->all();
+    }
+
     public function getValidTokenForUser(
         Store $store,
         int $userId,

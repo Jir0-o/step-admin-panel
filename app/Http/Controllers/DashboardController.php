@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\StoreOverviewService;
 use App\Services\StoreTokenSyncService;
+use App\Services\StoreTokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 
@@ -11,7 +12,8 @@ class DashboardController extends Controller
 {
     public function __construct(
         private readonly StoreOverviewService $storeOverviewService,
-        private readonly StoreTokenSyncService $storeTokenSyncService
+        private readonly StoreTokenSyncService $storeTokenSyncService,
+        private readonly StoreTokenService $storeTokenService
     ) {
     }
 
@@ -36,6 +38,17 @@ class DashboardController extends Controller
         return response()->json([
             'ok' => true,
             'data' => $payload,
+        ]);
+    }
+
+    public function tokenStatus(): JsonResponse
+    {
+        $userId = (int) Auth::id();
+        $forceRefresh = request()->boolean('refresh');
+
+        return response()->json([
+            'ok' => true,
+            'data' => $this->storeTokenService->tokenStatusForUser($userId, $forceRefresh),
         ]);
     }
 

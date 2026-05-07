@@ -43,6 +43,10 @@ Route::middleware([
         ->middleware('permission:view_dashboard')
         ->name('dashboard.overview');
 
+    Route::get('/dashboard/token-status', [DashboardController::class, 'tokenStatus'])
+        ->middleware('permission:view_dashboard')
+        ->name('dashboard.token-status');
+
     Route::view('/store', 'backend.admin.store')
         ->middleware('permission:view_store')
         ->name('store.index');

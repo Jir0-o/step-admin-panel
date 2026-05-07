@@ -330,6 +330,72 @@
     .status-paid { background-color: rgba(25, 135, 84, 0.05) !important; }
     .status-partial { background-color: rgba(255, 193, 7, 0.1) !important; }
     .status-unpaid { background-color: rgba(220, 53, 69, 0.05) !important; }
+
+    .live-table-loader-card {
+        display: inline-block;
+        min-width: 260px;
+        max-width: 420px;
+        padding: 14px 18px;
+        border: 1px solid #e9ecef;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+    }
+    .live-table-loader-head {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-weight: 700;
+        color: #1f2937;
+    }
+    .live-table-loader-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #0d6efd;
+        background: #eef4ff;
+        animation: liveTableSpin .9s linear infinite;
+    }
+    .live-table-loader-detail {
+        color: #6c757d;
+        font-size: 12px;
+        margin-top: 6px;
+    }
+    .live-table-progress {
+        height: 4px;
+        border-radius: 999px;
+        background: #e9ecef;
+        overflow: hidden;
+        margin-top: 10px;
+    }
+    .live-table-progress span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #0d6efd, #20c997);
+        transition: width .35s ease;
+    }
+    .table-shimmer {
+        display: inline-block;
+        height: 12px;
+        width: 70%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #edf1f5 0%, #f8fafc 45%, #edf1f5 100%);
+        background-size: 220% 100%;
+        animation: tableShimmer 1.25s ease-in-out infinite;
+    }
+    @keyframes tableShimmer {
+        0% { background-position: 100% 0; }
+        100% { background-position: -100% 0; }
+    }
+    @keyframes liveTableSpin {
+        to { transform: rotate(360deg); }
+    }
+
 </style>
 
 <script>
@@ -365,6 +431,90 @@ $(function() {
         d.textContent = text;
         return d.innerHTML;
     }
+
+
+    let tableLoadingTimers = [];
+
+    function clearTableLoadingTimers() {
+        tableLoadingTimers.forEach((timerId) => clearTimeout(timerId));
+        tableLoadingTimers = [];
+    }
+
+    function liveTableLoaderMarkup(colspan, title, detail, progress = 25) {
+        const skeletonRows = Array.from({ length: 4 }).map(() => `
+            <tr>
+                ${Array.from({ length: colspan }).map((_, index) => `<td><span class="table-shimmer" style="width:${index % 3 === 0 ? 54 : index % 3 === 1 ? 78 : 64}%"></span></td>`).join('')}
+            </tr>
+        `).join('');
+
+        return `
+            <tr>
+                <td colspan="${colspan}" class="text-center py-4">
+                    <div class="live-table-loader-card">
+                        <div class="live-table-loader-head">
+                            <span class="live-table-loader-icon"><i class="ri-refresh-line"></i></span>
+                            <span>${escapeHtml(title)}</span>
+                        </div>
+                        <div class="live-table-loader-detail">${escapeHtml(detail)}</div>
+                        <div class="live-table-progress"><span style="width:${progress}%"></span></div>
+                    </div>
+                </td>
+            </tr>
+            ${skeletonRows}
+        `;
+    }
+
+    function showTableLoading(colspan, dataLabel = 'data') {
+        clearTableLoadingTimers();
+
+        const stages = [
+            ['Checking secure connection', 'Checking saved token before requesting ' + dataLabel + '.', 25, 0],
+            ['Generating connection if needed', 'Refreshing token in the background if the session expired.', 45, 700],
+            ['Connecting to store server', 'Opening the remote POS connection safely.', 68, 1500],
+            ['Fetching latest ' + dataLabel, 'Waiting for the store server response.', 88, 2400],
+        ];
+
+        stages.forEach(([title, detail, progress, delay]) => {
+            const timerId = setTimeout(() => {
+                const tbodyId = colspan === 15 ? '#stockTableBody' : '#salesTableBody';
+                $(tbodyId).html(liveTableLoaderMarkup(colspan, title, detail, progress));
+            }, delay);
+            tableLoadingTimers.push(timerId);
+        });
+    }
+
+    function setButtonLoading(button, isLoading, text = 'Refreshing...') {
+        const $button = $(button);
+
+        if (!$button.data('original-html')) {
+            $button.data('original-html', $button.html());
+        }
+
+        $button.prop('disabled', isLoading);
+
+        if (isLoading) {
+            $button.html(`<span class="spinner-border spinner-border-sm me-1"></span>${text}`);
+        } else {
+            $button.html($button.data('original-html'));
+        }
+    }
+
+    function friendlyLoadError(message) {
+        const text = String(message || '').trim();
+        const lower = text.toLowerCase();
+
+        if (lower.includes('401') || lower.includes('unauthorized')) {
+            return 'Session expired. Please refresh again.';
+        }
+
+        if (lower.includes('timeout')) {
+            return 'Store server is taking longer than usual.';
+        }
+
+        return text || 'Could not load data.';
+    }
+
+
     
     function updateTime() {
         const now = new Date();
@@ -380,8 +530,10 @@ $(function() {
     // Load Data
     async function loadSalesData(page = 1, showLoading = true) {
         if (showLoading) {
-            $('#loadingRow').show();
-            $('#salesTableBody tr:not(#loadingRow)').hide();
+            showTableLoading(13, 'sales data');
+            $('#pagination').empty();
+            $('#pageInfo').text('Loading sales data...');
+            $('#totalInfo').text('Please wait...');
         }
         
         currentPage = page;
@@ -450,9 +602,9 @@ $(function() {
 
         } catch (error) {
             console.error('Load error:', error);
-            showError(`Failed to load data: ${error.message}`);
+            showError(friendlyLoadError(error.message));
         } finally {
-            $('#loadingRow').hide();
+            clearTableLoadingTimers();
         }
     }
 
@@ -686,9 +838,9 @@ $(function() {
     });
 
     $('#refreshBtn').on('click', function() {
-        $(this).prop('disabled', true);
+        setButtonLoading(this, true, 'Refreshing sales...');
         loadSalesData(1).finally(() => {
-            $(this).prop('disabled', false);
+            setButtonLoading(this, false);
         });
     });
 
