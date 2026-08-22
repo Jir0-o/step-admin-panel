@@ -40,11 +40,15 @@ Route::middleware([
     'verified',
 ])->group(function () {
     Route::get('/dashboard/overview', [DashboardController::class, 'overview'])
-        ->middleware('permission:view_dashboard')
+        ->middleware('permission:view_dashboard|view_store')
         ->name('dashboard.overview');
 
+    Route::get('/dashboard/overview/stores/{store}', [DashboardController::class, 'overviewStore'])
+        ->middleware('permission:view_dashboard|view_store')
+        ->name('dashboard.overview.store');
+
     Route::get('/dashboard/token-status', [DashboardController::class, 'tokenStatus'])
-        ->middleware('permission:view_dashboard')
+        ->middleware('permission:view_dashboard|view_store')
         ->name('dashboard.token-status');
 
     Route::view('/store', 'backend.admin.store')
@@ -104,6 +108,10 @@ Route::middleware([
     Route::match(['get', 'post'], '/stores/{store}/fetch-summary', [StoreSummaryProxyController::class, 'fetchSummary'])
         ->middleware('permission:view_store')
         ->name('stores.fetch-summary');
+
+    Route::get('/stores/{store}/final-stock-data-proxy', [StoreSummaryProxyController::class, 'finalStockDataProxy'])
+        ->middleware('permission:view_store')
+        ->name('stores.final-stock-data-proxy');
 
     Route::get('/store/{store}/stock-table', [StockDataController::class, 'index'])
         ->middleware('permission:view_store')

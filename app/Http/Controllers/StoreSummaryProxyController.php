@@ -53,7 +53,8 @@ class StoreSummaryProxyController extends Controller
                 'POST',
                 $endpoint,
                 [
-                    'timeout' => 20,
+                    'timeout' => $this->summaryTimeout(),
+                    'connect_timeout' => 10,
                     'json' => $params,
                     'headers' => [
                         'Content-Type' => 'application/json',
@@ -68,7 +69,8 @@ class StoreSummaryProxyController extends Controller
                     'GET',
                     $endpoint,
                     [
-                        'timeout' => 20,
+                        'timeout' => $this->summaryTimeout(),
+                        'connect_timeout' => 10,
                         'query' => $params,
                     ]
                 );
@@ -113,11 +115,17 @@ class StoreSummaryProxyController extends Controller
         }
     }
 
+
+    private function summaryTimeout(): int
+    {
+        return max(30, (int) config('services.store_summary.timeout', 60));
+    }
+
     public function finalStockDataProxy(Request $request, Store $store)
     {
         $route = StoreRoute::query()
             ->where('store_id', $store->id)
-            ->where('endpoint', 'final-stock-data')
+            ->whereIn('endpoint', ['final-stock-data', 'api/manager/data/final-stock-data', '/api/manager/data/final-stock-data'])
             ->where('is_active', true)
             ->first();
 
@@ -126,7 +134,8 @@ class StoreSummaryProxyController extends Controller
         }
 
         try {
-            $posUrl = rtrim($route->base_url, '/') . '/api/manager/data/final-stock-data';
+            $endpointPath = $route->endpoint === 'final-stock-data' ? '/api/manager/data/final-stock-data' : $route->endpoint;
+            $posUrl = rtrim($route->base_url, '/') . '/' . ltrim($endpointPath, '/');
             $response = $this->tokenService->sendAuthorized(
                 $store,
                 (int) Auth::id(),

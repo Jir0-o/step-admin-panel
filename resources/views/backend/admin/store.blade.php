@@ -5,7 +5,7 @@
 
 @section('content')
 <div class="row m-0">
-    <div class="col-md-6" data-aos="fade-up-right" data-aos-duration="2000">
+    <div class="col-md-3" data-aos="fade-up-right" data-aos-duration="2000">
         <div class="card theme-shadow overflow-hidden">
             <div class="card-body">
                 <div class="d-flex gap-3 align-items-center">
@@ -19,7 +19,7 @@
         </div>
     </div>
 
-    <div class="col-md-6" data-aos="fade-up-left" data-aos-duration="2000">
+    <div class="col-md-3" data-aos="fade-up-left" data-aos-duration="2000">
         <div class="card theme-shadow overflow-hidden">
             <div class="card-body">
                 <div class="d-flex gap-3 align-items-center">
@@ -27,6 +27,33 @@
                     <div class="info-text">
                         <p class="m-0 text-muted">Total Product</p>
                         <h6 id="total-products" class="m-0 fw-semibold">-</h6>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3" data-aos="fade-up-left" data-aos-duration="2000">
+        <div class="card theme-shadow overflow-hidden">
+            <div class="card-body">
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="icon-box"><i class="ri-target-line"></i></div>
+                    <div class="info-text">
+                        <p class="m-0 text-muted">Today's Target</p>
+                        <h6 id="store-today-target" class="m-0 fw-semibold text-danger">-</h6>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3" data-aos="fade-up-left" data-aos-duration="2000">
+        <div class="card theme-shadow overflow-hidden">
+            <div class="card-body">
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="icon-box"><i class="ri-line-chart-line"></i></div>
+                    <div class="info-text">
+                        <p class="m-0 text-muted">Today's Achievement</p>
+                        <h6 id="store-today-achievement" class="m-0 fw-semibold text-primary">-</h6>
                     </div>
                 </div>
             </div>
@@ -50,11 +77,13 @@
             <table class="table align-middle" id="stores-info-table">
                 <thead>
                     <tr class="text-center">
-                        <th class="bg-dark text-white">SR</th>
+                        <th class="bg-dark text-white store-code-sort-header" id="store-code-sort" role="button" tabindex="0" title="Sort by Store Code">
+                            Store Code <i id="store-code-sort-icon" class="ri-arrow-up-line ms-1"></i>
+                        </th>
                         <th class="bg-dark text-white">Store Name</th>
-                        <th class="bg-dark text-white">Today Sales</th>
-                        <th class="bg-dark text-white">This Month</th>
-                        <th class="bg-dark text-white">This Year</th>
+                        <th class="bg-dark text-white">Today's Target</th>
+                        <th class="bg-dark text-white">Today's Achievement</th>
+                        <th class="bg-dark text-white">Today's %</th>
                         <th class="bg-dark text-white">Salesmen</th>
                         <th class="bg-dark text-white">Today Discount</th>
                         <th class="bg-dark text-white">Month Discount</th>
@@ -119,6 +148,30 @@
             <div class="modal-body">
                 <div id="storeTargetsSummaryCards" class="mb-3"></div>
 
+                <div class="target-filter-bar border rounded bg-light p-3 mb-3">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label for="storeTargetsDateFrom" class="form-label small text-muted mb-1">From Date</label>
+                            <input type="date" class="form-control form-control-sm" id="storeTargetsDateFrom">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="storeTargetsDateTo" class="form-label small text-muted mb-1">To Date</label>
+                            <input type="date" class="form-control form-control-sm" id="storeTargetsDateTo">
+                        </div>
+                        <div class="col-md-auto">
+                            <button type="button" class="btn btn-sm btn-primary" id="applyStoreTargetsFilter">
+                                <i class="ri-filter-3-line me-1"></i> Filter
+                            </button>
+                        </div>
+                        <div class="col-md-auto">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="resetStoreTargetsFilter">Current Month</button>
+                        </div>
+                        <div class="col-md">
+                            <small class="text-muted" id="storeTargetsFilterInfo">Default: current month data</small>
+                        </div>
+                    </div>
+                </div>
+
                 <h6 class="mb-2">Salesmen Summary</h6>
                 <div class="table-responsive mb-4">
                     <table class="table table-bordered table-striped target-modal-table">
@@ -176,9 +229,11 @@
     const overviewUrl = @json(route('dashboard.overview'));
     const tokenStatusRoute = @json(route('dashboard.token-status'));
     const summaryRoute = @json(route('stores.fetch-summary', ['store' => '__ID__']));
+    const storeOverviewRoute = @json(route('dashboard.overview.store', ['store' => '__ID__']));
     const stockRoute = @json(route('manager.stock-data.index', ['store' => '__ID__']));
     const salesRoute = @json(route('manager.sales.index', ['store' => '__ID__']));
     const TABLES = 'products,suppliers,cart_informtion,expense_details,banner_information,salesman_target_summary';
+    const STORE_REFRESH_CONCURRENCY = 4;
 
     const $logBox = $('#store-aggregates').empty();
     let overviewRows = {};
@@ -190,6 +245,8 @@
     let targetDetailRows = [];
     let targetSummaryPage = 1;
     let targetDetailPage = 1;
+    let currentTargetStore = { id: null, name: '' };
+    let storeCodeSortDirection = 'asc';
     const TARGET_SUMMARY_PER_PAGE = 5;
     const TARGET_DETAIL_PER_PAGE = 8;
 
@@ -209,6 +266,103 @@
 
     function integer(v) {
         return num(v).toLocaleString();
+    }
+
+    function formatDateInput(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function currentMonthDateRange() {
+        const now = new Date();
+        return {
+            date_from: formatDateInput(new Date(now.getFullYear(), now.getMonth(), 1)),
+            date_to: formatDateInput(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+        };
+    }
+
+    function setDefaultTargetDateFilter() {
+        const range = currentMonthDateRange();
+        $('#storeTargetsDateFrom').val(range.date_from);
+        $('#storeTargetsDateTo').val(range.date_to);
+    }
+
+    function selectedTargetFilter() {
+        const range = currentMonthDateRange();
+        return {
+            date_from: $('#storeTargetsDateFrom').val() || range.date_from,
+            date_to: $('#storeTargetsDateTo').val() || range.date_to,
+        };
+    }
+
+    function targetFilterLabel(filter = selectedTargetFilter()) {
+        return `${filter.date_from} to ${filter.date_to}`;
+    }
+
+    function targetMoney(value) {
+        return `<span class="text-danger fw-semibold">${taka(value)}</span>`;
+    }
+
+    function achievedMoney(value) {
+        return `<span class="text-primary fw-semibold">${taka(value)}</span>`;
+    }
+
+    function storeBannerCode(store) {
+        return escapeHtml(store?.banner_code || store?.store_code || '-');
+    }
+
+    function rawStoreCode(store) {
+        return String(store?.banner_code || store?.store_code || '').trim();
+    }
+
+    function compareStoreCodes(a, b) {
+        const codeA = rawStoreCode(a);
+        const codeB = rawStoreCode(b);
+
+        // Rows whose remote Store Code has not loaded yet stay at the bottom.
+        if (!codeA && !codeB) {
+            return (a?._index ?? 0) - (b?._index ?? 0);
+        }
+
+        if (!codeA) return 1;
+        if (!codeB) return -1;
+
+        // Natural sorting: G2 < G10, G002 < G010, etc.
+        let result = codeA.localeCompare(codeB, undefined, {
+            numeric: true,
+            sensitivity: 'base',
+        });
+
+        if (result === 0) {
+            result = (a?._index ?? 0) - (b?._index ?? 0);
+        }
+
+        return storeCodeSortDirection === 'desc' ? -result : result;
+    }
+
+    function sortedOverviewRows() {
+        return Object.values(overviewRows).slice().sort(compareStoreCodes);
+    }
+
+    function updateStoreCodeSortIcon() {
+        const $icon = $('#store-code-sort-icon');
+        $icon.removeClass('ri-arrow-up-line ri-arrow-down-line');
+        $icon.addClass(storeCodeSortDirection === 'asc' ? 'ri-arrow-up-line' : 'ri-arrow-down-line');
+    }
+
+    function rerenderStoreRows() {
+        const rows = sortedOverviewRows();
+
+        if (!rows.length) {
+            $('#stores-info-tbody').html('<tr><td colspan="16" class="text-center py-5 text-muted">No stores found.</td></tr>');
+            updateStoreCodeSortIcon();
+            return;
+        }
+
+        $('#stores-info-tbody').html(rows.map((row) => renderStoreRow(row)).join(''));
+        updateStoreCodeSortIcon();
     }
 
     function summaryUrl(storeId) {
@@ -249,8 +403,8 @@
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                                     <div>
-                                        <h5 class="mb-1">${storeName || 'Store'}</h5>
-                                        <p class="mb-0 text-muted">Store ID: ${storeId || '-'} | Last Updated: ${now.toLocaleString()}</p>
+                                        <h5 class="mb-1">${escapeHtml(storeName || 'Store')}</h5>
+                                        <p class="mb-0 text-muted">Store ID: ${storeId || '-'} | Code: ${escapeHtml(bannerInfo.banner_code || bannerInfo.banner?.banner_code || '-')} | Last Updated: ${now.toLocaleString()}</p>
                                     </div>
                                     <div class="badge bg-success px-3 py-2">
                                         <i class="ri-check-line me-1"></i> Connected
@@ -277,8 +431,8 @@
                         <div class="card h-100 shadow-sm border-0">
                             <div class="card-body text-center">
                                 <small>Monthly Target</small>
-                                <h4 class="mt-2 mb-0">${taka(targetInfo.store_target_monthly || 0)}</h4>
-                                <small>Achieved: ${taka(targetInfo.monthly_achievement || 0)}</small>
+                                <h4 class="mt-2 mb-0 text-danger">${taka(targetInfo.store_target_monthly || 0)}</h4>
+                                <small class="text-primary fw-semibold">Achieved: ${taka(targetInfo.monthly_achievement || 0)}</small>
                             </div>
                         </div>
                     </div>
@@ -296,7 +450,7 @@
                         <div class="card h-100 shadow-sm border-0">
                             <div class="card-body text-center">
                                 <small>Yearly Target</small>
-                                <h4 class="mt-2 mb-0">${taka(targetInfo.store_target_yearly || 0)}</h4>
+                                <h4 class="mt-2 mb-0 text-danger">${taka(targetInfo.store_target_yearly || 0)}</h4>
                                 <small>${Number(targetInfo.yearly_percentage || 0).toFixed(2)}%</small>
                             </div>
                         </div>
@@ -749,8 +903,8 @@
                     <small class="text-muted">${escapeHtml(s.office_id || '')}</small>
                 </td>
                 <td class="text-center">${integer(s.targets_count || 0)}</td>
-                <td class="text-end">${taka(s.total_target || 0)}</td>
-                <td class="text-end text-success">${taka(s.total_achieved || 0)}</td>
+                <td class="text-end">${targetMoney(s.total_target || 0)}</td>
+                <td class="text-end">${achievedMoney(s.total_achieved || 0)}</td>
                 <td class="text-center">${Number(s.percent || 0).toFixed(2)}%</td>
                 <td>${escapeHtml(s.last_date || '-')}</td>
             </tr>
@@ -776,13 +930,13 @@
                     <small class="text-muted">${escapeHtml(row.office_id || '')}</small>
                 </td>
                 <td>${escapeHtml(targetPeriodLabel(row))}</td>
-                <td class="text-end">${taka(row.target_amount || 0)}</td>
-                <td class="text-end text-success">${taka(row.achieved_amount || 0)}</td>
+                <td class="text-end">${targetMoney(row.target_amount || 0)}</td>
+                <td class="text-end">${achievedMoney(row.achieved_amount || 0)}</td>
                 <td class="text-center">${integer(row.sales_count || 0)}</td>
                 <td class="text-center">${Number(row.percent || 0).toFixed(2)}%</td>
                 <td><span class="badge bg-primary">${escapeHtml(row.status || '-')}</span></td>
                 <td>
-                    <small>${escapeHtml(row.start_date || '-')}<br>to ${escapeHtml(row.end_date || '-')}</small>
+                    <small>${escapeHtml(row.filter_start_date || row.start_date || '-')}<br>to ${escapeHtml(row.filter_end_date || row.end_date || '-')}</small>
                 </td>
             </tr>
         `).join('');
@@ -802,6 +956,7 @@
         clearTargetLoadingTimers();
 
         const detail = payload?.salesman_target_details || {};
+        $('#storeTargetsFilterInfo').text(`Showing ${targetFilterLabel({ date_from: detail.date_from || selectedTargetFilter().date_from, date_to: detail.date_to || selectedTargetFilter().date_to })} data`);
         targetSummaryRows = Array.isArray(detail.summaries) ? detail.summaries : [];
         targetDetailRows = Array.isArray(detail.targets) ? detail.targets : [];
         targetSummaryPage = 1;
@@ -818,13 +973,13 @@
                 <div class="col-md-3 mb-2">
                     <div class="card border-0 shadow-sm"><div class="card-body text-center">
                         <small>Total Target</small>
-                        <h5 class="mb-0">${taka(detail.total_target || 0)}</h5>
+                        <h5 class="mb-0 text-danger">${taka(detail.total_target || 0)}</h5>
                     </div></div>
                 </div>
                 <div class="col-md-3 mb-2">
                     <div class="card border-0 shadow-sm"><div class="card-body text-center">
                         <small>Total Achieved</small>
-                        <h5 class="mb-0">${taka(detail.total_achieved || 0)}</h5>
+                        <h5 class="mb-0 text-primary">${taka(detail.total_achieved || 0)}</h5>
                     </div></div>
                 </div>
                 <div class="col-md-3 mb-2">
@@ -868,7 +1023,7 @@
     function renderTokenStatusRows(statuses, forceRefresh = false) {
         clearTokenStateTimers();
 
-        const rows = (statuses || []).map((store, index) => {
+        const rows = (statuses || []).map((store) => {
             const willRefresh = forceRefresh || store.needs_refresh;
             const firstState = willRefresh ? 'expired' : 'checking';
             const statusSelector = `#store-token-status-${store.id}`;
@@ -884,7 +1039,7 @@
 
             return `
             <tr class="table-light live-status-row">
-                <td class="text-center">${index + 1}</td>
+                <td class="text-center">${loadingCell(50)}</td>
                 <td class="text-center fw-semibold">${escapeHtml(store.name || '-')}</td>
                 <td class="text-center">${loadingCell(66)}</td>
                 <td class="text-center">${loadingCell(72)}</td>
@@ -906,11 +1061,203 @@
         $('#stores-info-tbody').html(rows || loadingRowMessage('refreshing'));
     }
 
-    function loadOverview(forceRefresh = false) {
+    function tableRowId(storeId) {
+        return `store-info-row-${storeId}`;
+    }
+
+    function storeOverviewUrl(storeId, forceRefresh = false) {
+        const url = storeOverviewRoute.replace('__ID__', encodeURIComponent(storeId));
+        return forceRefresh ? `${url}?refresh=1` : url;
+    }
+
+    function safeStoreNameAttr(store) {
+        return escapeHtml(store?.name || '');
+    }
+
+    function buildClientOverview() {
+        const rows = Object.values(overviewRows).sort((a, b) => (a._index || 0) - (b._index || 0));
+        const totals = {
+            store_count: rows.length,
+            products: 0,
+            target_today: 0,
+            achievement_today: 0,
+            failed_stores: 0,
+            pending_stores: 0,
+        };
+
+        rows.forEach((row) => {
+            if (row.pending) {
+                totals.pending_stores += 1;
+                return;
+            }
+
+            if (!row.ok) {
+                totals.failed_stores += 1;
+                return;
+            }
+
+            totals.products += num(row.products_total);
+            totals.target_today += num(row.store_target_today);
+            totals.achievement_today += num(row.today_achievement);
+        });
+
+        return totals;
+    }
+
+    function renderStoreTotals() {
+        const totals = buildClientOverview();
+        $('#total-stores').text(integer(totals.store_count || 0));
+        $('#total-products').text(integer(totals.products || 0));
+        $('#store-today-target').text(taka(totals.target_today || 0));
+        $('#store-today-achievement').text(taka(totals.achievement_today || 0));
+    }
+
+    function renderStoreRow(store) {
+        const statusBadge = store.pending
+            ? liveStatusMarkup('fetching', 'Waiting to fetch this store only.')
+            : (store.ok ? liveStatusMarkup('ready') : liveStatusMarkup('failed', friendlyFailureMessage(store.message)));
+        const safeName = safeStoreNameAttr(store);
+
+        return `
+            <tr id="${tableRowId(store.id)}" data-store-id="${store.id}">
+                <td class="text-center fw-semibold">${store.ok ? storeBannerCode(store) : '-'}</td>
+                <td class="text-center">${escapeHtml(store.name || '-')}</td>
+                <td class="text-center">${store.ok ? targetMoney(store.store_target_today) : '-'}</td>
+                <td class="text-center">${store.ok ? achievedMoney(store.today_achievement) : '-'}</td>
+                <td class="text-center">${store.ok ? (Number(store.today_percentage || 0).toFixed(2) + '%') : '-'}</td>
+                <td class="text-center">${store.ok ? integer(store.salesmen_count) : '-'}</td>
+                <td class="text-center">${store.ok ? taka(store.discount_today) : '-'}</td>
+                <td class="text-center">${store.ok ? taka(store.discount_month) : '-'}</td>
+                <td class="text-center">${store.ok ? targetMoney(store.store_target_monthly) : '-'}</td>
+                <td class="text-center">${store.ok ? achievedMoney(store.monthly_achievement) : '-'}</td>
+                <td class="text-center">${store.ok ? (Number(store.monthly_percentage || 0).toFixed(2) + '%') : '-'}</td>
+                <td class="text-center">${store.ok ? targetMoney(store.store_target_yearly) : '-'}</td>
+                <td class="text-center">${store.ok ? achievedMoney(store.yearly_achievement) : '-'}</td>
+                <td class="text-center">${store.ok ? (Number(store.yearly_percentage || 0).toFixed(2) + '%') : '-'}</td>
+                <td class="text-center js-row-status">${statusBadge}</td>
+                <td class="text-center">
+                    <div class="d-flex flex-wrap gap-1 justify-content-center">
+                        <button class="btn btn-sm btn-outline-secondary js-refresh-store" data-store-id="${store.id}" data-store-name="${safeName}"><i class="ri-refresh-line"></i></button>
+                        <button class="btn btn-sm btn-success js-view-store" data-store-id="${store.id}" data-store-name="${safeName}">View</button>
+                        <a class="btn btn-sm btn-info js-report-link" data-loading-label="Opening stock..." href="${stockRoute.replace('__ID__', store.id)}">Stock</a>
+                        <a class="btn btn-sm btn-primary js-report-link" data-loading-label="Opening sales..." href="${salesRoute.replace('__ID__', store.id)}">Sales</a>
+                        <button class="btn btn-sm btn-warning js-view-targets" data-store-id="${store.id}" data-store-name="${safeName}">Targets</button>
+                    </div>
+                </td>
+            </tr>`;
+    }
+
+    function renderStoreTable(stores) {
         overviewRows = {};
         $logBox.empty();
 
-        const url = forceRefresh ? `${overviewUrl}?refresh=1` : overviewUrl;
+        if (!stores.length) {
+            $('#stores-info-tbody').html('<tr><td colspan="16" class="text-center py-5 text-muted">No stores found.</td></tr>');
+            renderStoreTotals();
+            updateStoreCodeSortIcon();
+            return;
+        }
+
+        stores.forEach((store, index) => {
+            const row = { ...store, _index: index };
+            overviewRows[String(row.id)] = row;
+
+            if (row.ok) log(`Store ${row.name} synced from cache`);
+            else if (row.pending) log(`Store ${row.name} waiting for live refresh`);
+            else log(`Store ${row.name} failed: ${row.message || 'Unknown error'}`);
+        });
+
+        // Auto-sort immediately if Store Codes are already available from cache.
+        rerenderStoreRows();
+        renderStoreTotals();
+    }
+
+    function setStoreRowLoading(storeId) {
+        const $row = $(`#${tableRowId(storeId)}`);
+        $row.find('.js-row-status').html(liveStatusMarkup('fetching', 'Refreshing this store only.'));
+        $row.find('.js-refresh-store').prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+    }
+
+    function updateStoreRow(store) {
+        const key = String(store.id);
+        const previous = overviewRows[key] || {};
+        const index = Number.isInteger(previous._index) ? previous._index : Object.keys(overviewRows).length;
+        const row = { ...previous, ...store, pending: false, _index: index };
+        overviewRows[key] = row;
+
+        if (row.ok) log(`Store ${row.name} refreshed`);
+        else log(`Store ${row.name} failed: ${row.message || 'Unknown error'}`);
+
+        // banner_code/store_code arrives asynchronously from the overview API.
+        // Re-rendering here makes G001, G002, G003... automatically fall into order
+        // as soon as each real code becomes available.
+        rerenderStoreRows();
+        renderStoreTotals();
+    }
+
+    function markStoreRowFailed(storeId, message) {
+        const previous = overviewRows[String(storeId)] || { id: storeId, name: `Store #${storeId}` };
+        updateStoreRow({
+            ...previous,
+            ok: false,
+            pending: false,
+            message: friendlyFailureMessage(message || 'Failed to load this store.'),
+        });
+    }
+
+    function refreshStoreRow(storeId, forceRefresh = false) {
+        setStoreRowLoading(storeId);
+
+        return $.ajax({
+            url: storeOverviewUrl(storeId, forceRefresh),
+            method: 'GET',
+            dataType: 'json',
+            timeout: 90000,
+            headers: { Accept: 'application/json' },
+        })
+        .done((response) => updateStoreRow(response?.data || {}))
+        .fail((jqXHR, textStatus) => {
+            markStoreRowFailed(storeId, textStatus || jqXHR?.responseJSON?.message || 'Failed to refresh this store.');
+        });
+    }
+
+    function refreshStoreRows(stores, forceRefresh = false) {
+        const queue = (stores || []).slice();
+        const deferred = $.Deferred();
+        let active = 0;
+        let completed = 0;
+        const total = queue.length;
+
+        if (!total) {
+            deferred.resolve();
+            return deferred.promise();
+        }
+
+        function next() {
+            if (completed >= total) {
+                deferred.resolve();
+                return;
+            }
+
+            while (active < STORE_REFRESH_CONCURRENCY && queue.length) {
+                const store = queue.shift();
+                active += 1;
+                refreshStoreRow(store.id, forceRefresh)
+                    .always(() => {
+                        active -= 1;
+                        completed += 1;
+                        next();
+                    });
+            }
+        }
+
+        next();
+        return deferred.promise();
+    }
+
+    function loadOverview(forceRefresh = false) {
+        const quickParam = forceRefresh ? 'quick=1&refresh=1' : 'quick=1';
+        const url = `${overviewUrl}?${quickParam}`;
         const tokenStatusUrl = forceRefresh ? `${tokenStatusRoute}?refresh=1` : tokenStatusRoute;
 
         setStoreRefreshLoading(true);
@@ -928,68 +1275,24 @@
                 $.getJSON(url)
                     .done((response) => {
                         const data = response?.data || {};
-                        const totals = data.totals || {};
                         const stores = Array.isArray(data.stores) ? data.stores : [];
-
-                        $('#total-stores').text(integer(totals.store_count || stores.length));
-                        $('#total-products').text(integer(totals.products || 0));
+                        renderStoreTable(stores);
 
                         if (!stores.length) {
-                            $('#stores-info-tbody').html('<tr><td colspan="16" class="text-center py-5 text-muted">No stores found.</td></tr>');
+                            setStoreRefreshLoading(false);
                             return;
                         }
 
-                        const rows = stores.map((store, index) => {
-                            overviewRows[String(store.id)] = store;
-                            const statusBadge = store.ok
-                                ? liveStatusMarkup('ready')
-                                : liveStatusMarkup('failed', friendlyFailureMessage(store.message));
-
-                            if (store.ok) {
-                                log(`Store ${store.name} synced`);
-                            } else {
-                                log(`Store ${store.name} failed: ${store.message || 'Unknown error'}`);
-                            }
-
-                            return `
-                            <tr>
-                                <td class="text-center">${index + 1}</td>
-                                <td class="text-center">${store.name}</td>
-                                <td class="text-center">${store.ok ? taka(store.sales_today) : '-'}</td>
-                                <td class="text-center">${store.ok ? taka(store.sales_month) : '-'}</td>
-                                <td class="text-center">${store.ok ? taka(store.sales_year) : '-'}</td>
-                                <td class="text-center">${store.ok ? integer(store.salesmen_count) : '-'}</td>
-                                <td class="text-center">${store.ok ? taka(store.discount_today) : '-'}</td>
-                                <td class="text-center">${store.ok ? taka(store.discount_month) : '-'}</td>
-                                <td class="text-center">${store.ok ? taka(store.store_target_monthly) : '-'}</td>
-                                <td class="text-center">${store.ok ? taka(store.monthly_achievement) : '-'}</td>
-                                <td class="text-center">${store.ok ? (Number(store.monthly_percentage || 0).toFixed(2) + '%') : '-'}</td>
-                                <td class="text-center">${store.ok ? taka(store.store_target_yearly) : '-'}</td>
-                                <td class="text-center">${store.ok ? taka(store.yearly_achievement) : '-'}</td>
-                                <td class="text-center">${store.ok ? (Number(store.yearly_percentage || 0).toFixed(2) + '%') : '-'}</td>
-                                <td class="text-center">${statusBadge}</td>
-                                <td class="text-center">
-                                    <button class="btn btn-sm btn-success js-view-store" data-store-id="${store.id}" data-store-name="${store.name}">View</button>
-                                    <a class="btn btn-sm btn-info js-report-link" data-loading-label="Opening stock..." href="${stockRoute.replace('__ID__', store.id)}">Stock</a>
-                                    <a class="btn btn-sm btn-primary js-report-link" data-loading-label="Opening sales..." href="${salesRoute.replace('__ID__', store.id)}">Sales</a>
-                                    <button
-                                        class="btn btn-sm btn-warning js-view-targets"
-                                        data-store-id="${store.id}"
-                                        data-store-name="${store.name}">
-                                        Targets
-                                    </button>
-                                </td>
-                            </tr>`;
-                        }).join('');
-
-                        $('#stores-info-tbody').html(rows);
+                        refreshStoreRows(stores, forceRefresh)
+                            .always(() => {
+                                rerenderStoreRows();
+                                clearTokenStateTimers();
+                                setStoreRefreshLoading(false);
+                            });
                     })
                     .fail(() => {
                         log('Store overview API failed');
                         $('#stores-info-tbody').html('<tr><td colspan="16" class="text-center py-5 text-danger">Failed to load store overview.</td></tr>');
-                    })
-                    .always(() => {
-                        clearTokenStateTimers();
                         setStoreRefreshLoading(false);
                     });
             });
@@ -1029,21 +1332,18 @@
         return row.period_type || '-';
     }
 
-    $(document).on('click', '.js-view-targets', function () {
-        const storeId = $(this).data('store-id');
-        const storeName = $(this).data('store-name');
-
-        $('#storeTargetsLabel').text(`${storeName} - Salesman Targets`);
+    function loadTargetsModalData(storeId, storeName) {
+        const filter = selectedTargetFilter();
+        $('#storeTargetsFilterInfo').text(`Showing ${targetFilterLabel(filter)} data`);
         startTargetLoading(storeName);
-        showBootstrapModal('storeTargetsModal');
 
         $.ajax({
             url: summaryRoute.replace('__ID__', storeId),
             method: 'GET',
             data: {
                 tables: 'salesman_target_details',
-                year: new Date().getFullYear(),
-                month: new Date().getMonth() + 1
+                date_from: filter.date_from,
+                date_to: filter.date_to
             },
             headers: { Accept: 'application/json' },
         })
@@ -1055,6 +1355,29 @@
         .fail((jqXHR, textStatus) => {
             showTargetFailure(textStatus || jqXHR?.responseJSON?.message || 'Failed to load target data.');
         });
+    }
+
+    $(document).on('click', '.js-view-targets', function () {
+        const storeId = $(this).data('store-id');
+        const storeName = $(this).data('store-name');
+
+        currentTargetStore = { id: storeId, name: storeName };
+        $('#storeTargetsLabel').text(`${storeName} - Salesman Targets`);
+        setDefaultTargetDateFilter();
+        showBootstrapModal('storeTargetsModal');
+        loadTargetsModalData(storeId, storeName);
+    });
+
+    $(document).on('click', '#applyStoreTargetsFilter', function () {
+        if (!currentTargetStore.id) return;
+        loadTargetsModalData(currentTargetStore.id, currentTargetStore.name);
+    });
+
+    $(document).on('click', '#resetStoreTargetsFilter', function () {
+        setDefaultTargetDateFilter();
+
+        if (!currentTargetStore.id) return;
+        loadTargetsModalData(currentTargetStore.id, currentTargetStore.name);
     });
 
     function loadStoreDetails(storeId, storeName) {
@@ -1073,7 +1396,7 @@
             method: 'GET',
             data: { tables: TABLES },
             dataType: 'json',
-            timeout: 20000,
+            timeout: 90000,
             headers: { Accept: 'application/json' }
         })
         .done((response) => renderStoreDetailsFromSource(response?.data || response, storeName, storeId))
@@ -1119,13 +1442,44 @@
 
     $(document).on('click', '#exportStoreDetailsBtn', downloadStoreDetails);
     $(document).on('click', '#printStoreDetailsBtn', printStoreDetails);
+    $(document).on('click', '.js-refresh-store', function (e) {
+        e.preventDefault();
+        refreshStoreRow($(this).data('store-id'), true);
+    });
+
     $('#refresh-store-overview').on('click', () => loadOverview(true));
+
+    $(document).on('click', '#store-code-sort', function () {
+        storeCodeSortDirection = storeCodeSortDirection === 'asc' ? 'desc' : 'asc';
+        rerenderStoreRows();
+    });
+
+    $(document).on('keydown', '#store-code-sort', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        $(this).trigger('click');
+    });
 
     loadOverview();
 })();
 </script>
 
 <style>
+.store-code-sort-header {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.store-code-sort-header:hover {
+    background-color: #343a40 !important;
+}
+
+.store-code-sort-header i {
+    font-size: 14px;
+    vertical-align: middle;
+}
+
 .icon-box {
     width: 50px;
     height: 50px;

@@ -171,7 +171,8 @@ class StoreTokenService
         try {
             return $lock->block(5, function () use ($store, $userId, $email, $password) {
                 $response = Http::acceptJson()
-                    ->timeout(15)
+                    ->connectTimeout(10)
+                    ->timeout(30)
                     ->asJson()
                     ->post($store->login_api_url, [
                         'login' => $email,
@@ -274,6 +275,7 @@ class StoreTokenService
     private function sendHttpRequest(string $token, string $method, string $url, array $options = []): Response
     {
         $pending = Http::acceptJson()
+            ->connectTimeout((int) ($options['connect_timeout'] ?? 10))
             ->timeout((int) ($options['timeout'] ?? 30))
             ->withToken($token);
 

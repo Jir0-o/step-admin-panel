@@ -26,8 +26,8 @@
     <div class="col-md-6 col-xl-4">
         <div class="card theme-shadow h-100">
             <div class="card-body">
-                <p class="m-0 text-muted">Total This Month Target</p>
-                <h4 id="dashboard-month-target" class="mt-2 mb-1">-</h4>
+                <p class="m-0 text-muted">All Store Today's Target</p>
+                <h4 id="dashboard-month-target" class="mt-2 mb-1 text-danger">-</h4>
             </div>
         </div>
     </div>
@@ -35,8 +35,8 @@
     <div class="col-md-6 col-xl-4">
         <div class="card theme-shadow h-100">
             <div class="card-body">
-                <p class="m-0 text-muted">All Store Achievement</p>
-                <h4 id="dashboard-month-achievement" class="mt-2 mb-1">-</h4>
+                <p class="m-0 text-muted">All Store Today's Achievement</p>
+                <h4 id="dashboard-month-achievement" class="mt-2 mb-1 text-primary">-</h4>
             </div>
         </div>
     </div>
@@ -44,7 +44,7 @@
     <div class="col-md-6 col-xl-4">
         <div class="card theme-shadow h-100">
             <div class="card-body">
-                <p class="m-0 text-muted">Achievement Percentage</p>
+                <p class="m-0 text-muted">Today's Achievement %</p>
                 <h4 id="dashboard-month-percentage" class="mt-2 mb-1">-</h4>
             </div>
         </div>
@@ -116,11 +116,15 @@
                 <table class="table align-middle">
                     <thead>
                         <tr class="text-center">
-                            <th class="bg-dark text-white">SR</th>
+                            <th class="bg-dark text-white">
+                                <button type="button" id="dashboard-store-code-sort" class="btn btn-link btn-sm text-white text-decoration-none p-0 fw-semibold" title="Sort by store code">
+                                    Store Code <i id="dashboard-store-code-sort-icon" class="ri-sort-asc"></i>
+                                </button>
+                            </th>
                             <th class="bg-dark text-white">Store Name</th>
-                            <th class="bg-dark text-white">Today Sales</th>
-                            <th class="bg-dark text-white">This Month</th>
-                            <th class="bg-dark text-white">This Year</th>
+                            <th class="bg-dark text-white">Today's Target</th>
+                            <th class="bg-dark text-white">Today's Achievement</th>
+                            <th class="bg-dark text-white">Today's %</th>
                             <th class="bg-dark text-white">Salesmen</th>
                             <th class="bg-dark text-white">Today Discount</th>
                             <th class="bg-dark text-white">Month Discount</th>
@@ -167,6 +171,30 @@
 
             <div class="modal-body">
                 <div id="storeTargetsSummaryCards" class="mb-3"></div>
+
+                <div class="target-filter-bar border rounded bg-light p-3 mb-3">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label for="storeTargetsDateFrom" class="form-label small text-muted mb-1">From Date</label>
+                            <input type="date" class="form-control form-control-sm" id="storeTargetsDateFrom">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="storeTargetsDateTo" class="form-label small text-muted mb-1">To Date</label>
+                            <input type="date" class="form-control form-control-sm" id="storeTargetsDateTo">
+                        </div>
+                        <div class="col-md-auto">
+                            <button type="button" class="btn btn-sm btn-primary" id="applyStoreTargetsFilter">
+                                <i class="ri-filter-3-line me-1"></i> Filter
+                            </button>
+                        </div>
+                        <div class="col-md-auto">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="resetStoreTargetsFilter">Current Month</button>
+                        </div>
+                        <div class="col-md">
+                            <small class="text-muted" id="storeTargetsFilterInfo">Default: current month data</small>
+                        </div>
+                    </div>
+                </div>
 
                 <h6 class="mb-2">Salesmen Summary</h6>
                 <div class="table-responsive mb-4">
@@ -453,12 +481,30 @@
     opacity: .78;
 }
 
+
+.dashboard-store-sort-button {
+    color: inherit;
+}
+
+#dashboard-store-code-sort:hover,
+#dashboard-store-code-sort:focus {
+    color: #fff;
+    opacity: .85;
+    box-shadow: none;
+}
+
+#dashboard-store-code-sort i {
+    font-size: 16px;
+    vertical-align: -2px;
+}
+
 </style>
 <script>
 (() => {
     const overviewUrl = @json(route('dashboard.overview'));
     const tokenStatusRoute = @json(route('dashboard.token-status'));
     const summaryRoute = @json(route('stores.fetch-summary', ['store' => '__ID__']));
+    const storeOverviewRoute = @json(route('dashboard.overview.store', ['store' => '__ID__']));
     const stockRoute = @json(route('manager.stock-data.index', ['store' => '__ID__']));
     const salesRoute = @json(route('manager.sales.index', ['store' => '__ID__']));
 
@@ -472,13 +518,82 @@
     let targetDetailRows = [];
     let targetSummaryPage = 1;
     let targetDetailPage = 1;
+    let currentTargetStore = { id: null, name: '' };
     const TARGET_SUMMARY_PER_PAGE = 5;
     const TARGET_DETAIL_PER_PAGE = 8;
+    let storeCodeSortDirection = 'asc';
 
 
-    const taka = (value) => '৳ ' + Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const integer = (value) => Number(value || 0).toLocaleString();
+    const num = (value) => {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : 0;
+    };
+    const taka = (value) => '৳ ' + num(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const integer = (value) => num(value).toLocaleString();
     const TABLES = 'products,suppliers,cart_informtion,expense_details,banner_information,salesman_target_summary';
+    const STORE_REFRESH_CONCURRENCY = 4;
+
+    const STORE_CODE_COLLATOR = new Intl.Collator(undefined, {
+        numeric: true,
+        sensitivity: 'base',
+    });
+
+    function storeCodeValue(store) {
+        return String(store?.banner_code || store?.store_code || '').trim();
+    }
+
+    function compareStoreRowsByCode(left, right) {
+        const leftCode = storeCodeValue(left);
+        const rightCode = storeCodeValue(right);
+
+        // Rows whose real store code has not arrived yet stay at the bottom.
+        // Once the async DB/API response arrives, updateStoreRow() calls the
+        // sorter again and the row moves automatically to its correct place.
+        if (!leftCode && !rightCode) {
+            return (left._originalIndex || 0) - (right._originalIndex || 0);
+        }
+
+        if (!leftCode) return 1;
+        if (!rightCode) return -1;
+
+        let result = STORE_CODE_COLLATOR.compare(leftCode, rightCode);
+
+        if (storeCodeSortDirection === 'desc') {
+            result *= -1;
+        }
+
+        if (result !== 0) return result;
+
+        return String(left.name || '').localeCompare(String(right.name || ''));
+    }
+
+    function applyLoadedStoreCodeSort() {
+        const rows = Object.values(overviewRows).sort(compareStoreRowsByCode);
+        const $tbody = $('#dashboard-store-tbody');
+
+        rows.forEach((row, index) => {
+            row._index = index;
+            overviewRows[String(row.id)] = row;
+
+            const $existing = $(`#${tableRowId(row.id)}`);
+            if ($existing.length) {
+                $tbody.append($existing);
+            }
+        });
+    }
+
+    function updateStoreCodeSortIcon() {
+        const icon = $('#dashboard-store-code-sort-icon');
+        icon.removeClass('ri-sort-asc ri-sort-desc')
+            .addClass(storeCodeSortDirection === 'asc' ? 'ri-sort-asc' : 'ri-sort-desc');
+
+        $('#dashboard-store-code-sort').attr(
+            'title',
+            storeCodeSortDirection === 'asc'
+                ? 'Currently G0001 → G0002. Click for descending.'
+                : 'Currently descending. Click for G0001 → G0002.'
+        );
+    }
 
     function renderCards(totals) {
         $('#total-sales-year').text(taka(totals.sales_year));
@@ -496,9 +611,9 @@
         $('#today-income-quick').text(taka(totals.income_today));
         $('#yesterday-income').text(taka(totals.income_yesterday));
         $('#total-expenses').text(taka(totals.expenses));
-        $('#dashboard-month-target').text(taka(totals.target_monthly));
-        $('#dashboard-month-achievement').text(taka(totals.achievement_monthly));
-        $('#dashboard-month-percentage').text((Number(totals.percentage_monthly || 0)).toFixed(2) + '%');
+        $('#dashboard-month-target').text(taka(totals.target_today));
+        $('#dashboard-month-achievement').text(taka(totals.achievement_today));
+        $('#dashboard-month-percentage').text((Number(totals.percentage_today || 0)).toFixed(2) + '%');
     }
 
 
@@ -566,6 +681,51 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function formatDateInput(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function currentMonthDateRange() {
+        const now = new Date();
+        return {
+            date_from: formatDateInput(new Date(now.getFullYear(), now.getMonth(), 1)),
+            date_to: formatDateInput(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+        };
+    }
+
+    function setDefaultTargetDateFilter() {
+        const range = currentMonthDateRange();
+        $('#storeTargetsDateFrom').val(range.date_from);
+        $('#storeTargetsDateTo').val(range.date_to);
+    }
+
+    function selectedTargetFilter() {
+        const range = currentMonthDateRange();
+        return {
+            date_from: $('#storeTargetsDateFrom').val() || range.date_from,
+            date_to: $('#storeTargetsDateTo').val() || range.date_to,
+        };
+    }
+
+    function targetFilterLabel(filter = selectedTargetFilter()) {
+        return `${filter.date_from} to ${filter.date_to}`;
+    }
+
+    function targetMoney(value) {
+        return `<span class="text-danger fw-semibold">${taka(value)}</span>`;
+    }
+
+    function achievedMoney(value) {
+        return `<span class="text-primary fw-semibold">${taka(value)}</span>`;
+    }
+
+    function storeBannerCode(store) {
+        return escapeHtml(store?.banner_code || store?.store_code || '-');
     }
 
     function friendlyFailureMessage(message) {
@@ -833,8 +993,8 @@
                     <small class="text-muted">${escapeHtml(s.office_id || '')}</small>
                 </td>
                 <td class="text-center">${integer(s.targets_count || 0)}</td>
-                <td class="text-end">${taka(s.total_target || 0)}</td>
-                <td class="text-end text-success">${taka(s.total_achieved || 0)}</td>
+                <td class="text-end">${targetMoney(s.total_target || 0)}</td>
+                <td class="text-end">${achievedMoney(s.total_achieved || 0)}</td>
                 <td class="text-center">${Number(s.percent || 0).toFixed(2)}%</td>
                 <td>${escapeHtml(s.last_date || '-')}</td>
             </tr>
@@ -860,13 +1020,13 @@
                     <small class="text-muted">${escapeHtml(row.office_id || '')}</small>
                 </td>
                 <td>${escapeHtml(targetPeriodLabel(row))}</td>
-                <td class="text-end">${taka(row.target_amount || 0)}</td>
-                <td class="text-end text-success">${taka(row.achieved_amount || 0)}</td>
+                <td class="text-end">${targetMoney(row.target_amount || 0)}</td>
+                <td class="text-end">${achievedMoney(row.achieved_amount || 0)}</td>
                 <td class="text-center">${integer(row.sales_count || 0)}</td>
                 <td class="text-center">${Number(row.percent || 0).toFixed(2)}%</td>
                 <td><span class="badge bg-primary">${escapeHtml(row.status || '-')}</span></td>
                 <td>
-                    <small>${escapeHtml(row.start_date || '-')}<br>to ${escapeHtml(row.end_date || '-')}</small>
+                    <small>${escapeHtml(row.filter_start_date || row.start_date || '-')}<br>to ${escapeHtml(row.filter_end_date || row.end_date || '-')}</small>
                 </td>
             </tr>
         `).join('');
@@ -886,6 +1046,7 @@
         clearTargetLoadingTimers();
 
         const detail = payload?.salesman_target_details || {};
+        $('#storeTargetsFilterInfo').text(`Showing ${targetFilterLabel({ date_from: detail.date_from || selectedTargetFilter().date_from, date_to: detail.date_to || selectedTargetFilter().date_to })} data`);
         targetSummaryRows = Array.isArray(detail.summaries) ? detail.summaries : [];
         targetDetailRows = Array.isArray(detail.targets) ? detail.targets : [];
         targetSummaryPage = 1;
@@ -902,13 +1063,13 @@
                 <div class="col-md-3 mb-2">
                     <div class="card border-0 shadow-sm"><div class="card-body text-center">
                         <small>Total Target</small>
-                        <h5 class="mb-0">${taka(detail.total_target || 0)}</h5>
+                        <h5 class="mb-0 text-danger">${taka(detail.total_target || 0)}</h5>
                     </div></div>
                 </div>
                 <div class="col-md-3 mb-2">
                     <div class="card border-0 shadow-sm"><div class="card-body text-center">
                         <small>Total Achieved</small>
-                        <h5 class="mb-0">${taka(detail.total_achieved || 0)}</h5>
+                        <h5 class="mb-0 text-primary">${taka(detail.total_achieved || 0)}</h5>
                     </div></div>
                 </div>
                 <div class="col-md-3 mb-2">
@@ -968,7 +1129,7 @@
 
             return `
             <tr class="table-light live-status-row">
-                <td class="text-center">${index + 1}</td>
+                <td class="text-center">${loadingCell(50)}</td>
                 <td class="text-center fw-semibold">${escapeHtml(store.name || '-')}</td>
                 <td class="text-center">${loadingCell(66)}</td>
                 <td class="text-center">${loadingCell(72)}</td>
@@ -990,46 +1151,235 @@
         $('#dashboard-store-tbody').html(rows || loadingRowMessage('refreshing'));
     }
 
-    function renderTable(stores) {
-        overviewRows = {};
-        const rows = stores.map((store, index) => {
-            overviewRows[String(store.id)] = store;
-            const statusBadge = store.ok
-                ? liveStatusMarkup('ready')
-                : liveStatusMarkup('failed', friendlyFailureMessage(store.message));
+    function tableRowId(storeId) {
+        return `dashboard-store-row-${storeId}`;
+    }
 
-            return `
-            <tr>
-                <td class="text-center">${index + 1}</td>
-                <td class="text-center">${store.name}</td>
-                <td class="text-center">${store.ok ? taka(store.sales_today) : '-'}</td>
-                <td class="text-center">${store.ok ? taka(store.sales_month) : '-'}</td>
-                <td class="text-center">${store.ok ? taka(store.sales_year) : '-'}</td>
+    function storeOverviewUrl(storeId, forceRefresh = false) {
+        const url = storeOverviewRoute.replace('__ID__', encodeURIComponent(storeId));
+        return forceRefresh ? `${url}?refresh=1` : url;
+    }
+
+    function safeStoreNameAttr(store) {
+        return escapeHtml(store?.name || '');
+    }
+
+    function buildClientOverview() {
+        const rows = Object.values(overviewRows).sort((a, b) => (a._index || 0) - (b._index || 0));
+        const totals = {
+            store_count: rows.length,
+            products: 0,
+            suppliers: 0,
+            sales_year: 0,
+            sales_month: 0,
+            sales_today: 0,
+            sales_yesterday: 0,
+            discount_today: 0,
+            discount_month: 0,
+            profit: 0,
+            expenses: 0,
+            income_today: 0,
+            income_yesterday: 0,
+            target_today: 0,
+            achievement_today: 0,
+            percentage_today: 0,
+            target_monthly: 0,
+            achievement_monthly: 0,
+            percentage_monthly: 0,
+            failed_stores: 0,
+            pending_stores: 0,
+        };
+
+        rows.forEach((row) => {
+            if (row.pending) {
+                totals.pending_stores += 1;
+                return;
+            }
+
+            if (!row.ok) {
+                totals.failed_stores += 1;
+                return;
+            }
+
+            totals.products += num(row.products_total);
+            totals.suppliers += num(row.suppliers_total);
+            totals.sales_year += num(row.sales_year);
+            totals.sales_month += num(row.sales_month);
+            totals.sales_today += num(row.sales_today);
+            totals.sales_yesterday += num(row.sales_yesterday);
+            totals.discount_today += num(row.discount_today);
+            totals.discount_month += num(row.discount_month);
+            totals.profit += num(row.profit);
+            totals.expenses += num(row.expenses);
+            totals.income_today += num(row.income_today);
+            totals.income_yesterday += num(row.income_yesterday);
+            totals.target_today += num(row.store_target_today);
+            totals.achievement_today += num(row.today_achievement);
+            totals.target_monthly += num(row.store_target_monthly);
+            totals.achievement_monthly += num(row.monthly_achievement);
+        });
+
+        totals.percentage_today = totals.target_today > 0 ? ((totals.achievement_today / totals.target_today) * 100) : 0;
+        totals.percentage_monthly = totals.target_monthly > 0 ? ((totals.achievement_monthly / totals.target_monthly) * 100) : 0;
+
+        const chart = rows
+            .filter((row) => row.ok)
+            .sort((a, b) => num(b.sales_year) - num(a.sales_year))
+            .slice(0, 10)
+            .map((row) => ({ label: row.name || '-', value: num(row.sales_year) }));
+
+        return { totals, chart };
+    }
+
+    function refreshDashboardAggregates() {
+        const overview = buildClientOverview();
+        renderCards(overview.totals);
+        renderChart(overview.chart);
+
+        const rows = Object.values(overviewRows);
+        const hasReadyData = rows.some((row) => row.ok);
+        const hasPendingRows = rows.some((row) => row.pending);
+
+        // Do not keep dashboard cards/chart locked until every store finishes.
+        // One slow/down store should not keep the whole dashboard in loading mode.
+        if (hasReadyData || !hasPendingRows) {
+            setDashboardDataLoading(false);
+        }
+    }
+
+    function renderStoreRow(store, index) {
+        const statusBadge = store.pending
+            ? liveStatusMarkup('fetching', 'Waiting to fetch this store only.')
+            : (store.ok ? liveStatusMarkup('ready') : liveStatusMarkup('failed', friendlyFailureMessage(store.message)));
+        const safeName = safeStoreNameAttr(store);
+
+        return `
+            <tr id="${tableRowId(store.id)}" data-store-id="${store.id}">
+                <td class="text-center fw-semibold">${store.ok ? storeBannerCode(store) : '-'}</td>
+                <td class="text-center">${escapeHtml(store.name || '-')}</td>
+                <td class="text-center">${store.ok ? targetMoney(store.store_target_today) : '-'}</td>
+                <td class="text-center">${store.ok ? achievedMoney(store.today_achievement) : '-'}</td>
+                <td class="text-center">${store.ok ? (Number(store.today_percentage || 0).toFixed(2) + '%') : '-'}</td>
                 <td class="text-center">${store.ok ? integer(store.salesmen_count) : '-'}</td>
                 <td class="text-center">${store.ok ? taka(store.discount_today) : '-'}</td>
                 <td class="text-center">${store.ok ? taka(store.discount_month) : '-'}</td>
-                <td class="text-center">${store.ok ? taka(store.store_target_monthly) : '-'}</td>
-                <td class="text-center">${store.ok ? taka(store.monthly_achievement) : '-'}</td>
+                <td class="text-center">${store.ok ? targetMoney(store.store_target_monthly) : '-'}</td>
+                <td class="text-center">${store.ok ? achievedMoney(store.monthly_achievement) : '-'}</td>
                 <td class="text-center">${store.ok ? (Number(store.monthly_percentage || 0).toFixed(2) + '%') : '-'}</td>
-                <td class="text-center">${store.ok ? taka(store.store_target_yearly) : '-'}</td>
-                <td class="text-center">${store.ok ? taka(store.yearly_achievement) : '-'}</td>
+                <td class="text-center">${store.ok ? targetMoney(store.store_target_yearly) : '-'}</td>
+                <td class="text-center">${store.ok ? achievedMoney(store.yearly_achievement) : '-'}</td>
                 <td class="text-center">${store.ok ? (Number(store.yearly_percentage || 0).toFixed(2) + '%') : '-'}</td>
-                <td class="text-center">${statusBadge}</td>
+                <td class="text-center js-row-status">${statusBadge}</td>
                 <td class="text-center">
-                    <button class="btn btn-sm btn-success js-view-store" data-store-id="${store.id}" data-store-name="${store.name}">View</button>
-                    <a class="btn btn-sm btn-info js-report-link" data-loading-label="Opening stock..." href="${stockRoute.replace('__ID__', store.id)}">Stock</a>
-                    <a class="btn btn-sm btn-primary js-report-link" data-loading-label="Opening sales..." href="${salesRoute.replace('__ID__', store.id)}">Sales</a>
-                    <button
-                        class="btn btn-sm btn-warning js-view-targets"
-                        data-store-id="${store.id}"
-                        data-store-name="${store.name}">
-                        Targets
-                    </button>
+                    <div class="d-flex flex-wrap gap-1 justify-content-center">
+                        <button class="btn btn-sm btn-outline-secondary js-refresh-store" data-store-id="${store.id}" data-store-name="${safeName}"><i class="ri-refresh-line"></i></button>
+                        <button class="btn btn-sm btn-success js-view-store" data-store-id="${store.id}" data-store-name="${safeName}">View</button>
+                        <a class="btn btn-sm btn-info js-report-link" data-loading-label="Opening stock..." href="${stockRoute.replace('__ID__', store.id)}">Stock</a>
+                        <a class="btn btn-sm btn-primary js-report-link" data-loading-label="Opening sales..." href="${salesRoute.replace('__ID__', store.id)}">Sales</a>
+                        <button class="btn btn-sm btn-warning js-view-targets" data-store-id="${store.id}" data-store-name="${safeName}">Targets</button>
+                    </div>
                 </td>
             </tr>`;
+    }
+
+    function renderTable(stores) {
+        overviewRows = {};
+        const rows = stores.map((store, index) => {
+            const row = { ...store, _index: index, _originalIndex: index };
+            overviewRows[String(row.id)] = row;
+            return renderStoreRow(row, index);
         }).join('');
 
         $('#dashboard-store-tbody').html(rows || '<tr><td colspan="16" class="text-center py-4">No stores found.</td></tr>');
+        applyLoadedStoreCodeSort();
+        refreshDashboardAggregates();
+    }
+
+    function setStoreRowLoading(storeId) {
+        const $row = $(`#${tableRowId(storeId)}`);
+        $row.find('.js-row-status').html(liveStatusMarkup('fetching', 'Refreshing this store only.'));
+        $row.find('.js-refresh-store').prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+    }
+
+    function updateStoreRow(store) {
+        const key = String(store.id);
+        const previous = overviewRows[key] || {};
+        const index = Number.isInteger(previous._index) ? previous._index : Object.keys(overviewRows).length;
+        const originalIndex = Number.isInteger(previous._originalIndex) ? previous._originalIndex : index;
+        const row = { ...previous, ...store, pending: false, _index: index, _originalIndex: originalIndex };
+        overviewRows[key] = row;
+        const $existing = $(`#${tableRowId(row.id)}`);
+
+        if ($existing.length) {
+            $existing.replaceWith(renderStoreRow(row, index));
+        }
+
+        // Store Code (banner_code/store_code) arrives asynchronously from the
+        // store database. Re-sort immediately when the real code becomes known.
+        applyLoadedStoreCodeSort();
+        refreshDashboardAggregates();
+    }
+
+    function markStoreRowFailed(storeId, message) {
+        const previous = overviewRows[String(storeId)] || { id: storeId, name: `Store #${storeId}` };
+        updateStoreRow({
+            ...previous,
+            ok: false,
+            pending: false,
+            message: friendlyFailureMessage(message || 'Failed to load this store.'),
+        });
+    }
+
+    function refreshStoreRow(storeId, forceRefresh = false) {
+        setStoreRowLoading(storeId);
+
+        return $.ajax({
+            url: storeOverviewUrl(storeId, forceRefresh),
+            method: 'GET',
+            dataType: 'json',
+            timeout: 90000,
+            headers: { Accept: 'application/json' },
+        })
+        .done((response) => {
+            updateStoreRow(response?.data || {});
+        })
+        .fail((jqXHR, textStatus) => {
+            markStoreRowFailed(storeId, textStatus || jqXHR?.responseJSON?.message || 'Failed to refresh this store.');
+        });
+    }
+
+    function refreshStoreRows(stores, forceRefresh = false) {
+        const queue = (stores || []).slice();
+        const deferred = $.Deferred();
+        let active = 0;
+        let completed = 0;
+        const total = queue.length;
+
+        if (!total) {
+            deferred.resolve();
+            return deferred.promise();
+        }
+
+        function next() {
+            if (completed >= total) {
+                deferred.resolve();
+                return;
+            }
+
+            while (active < STORE_REFRESH_CONCURRENCY && queue.length) {
+                const store = queue.shift();
+                active += 1;
+                refreshStoreRow(store.id, forceRefresh)
+                    .always(() => {
+                        active -= 1;
+                        completed += 1;
+                        next();
+                    });
+            }
+        }
+
+        next();
+        return deferred.promise();
     }
 
     function showBootstrapModal(id) {
@@ -1066,21 +1416,18 @@
         return row.period_type || '-';
     }
 
-    $(document).on('click', '.js-view-targets', function () {
-        const storeId = $(this).data('store-id');
-        const storeName = $(this).data('store-name');
-
-        $('#storeTargetsLabel').text(`${storeName} - Salesman Targets`);
+    function loadTargetsModalData(storeId, storeName) {
+        const filter = selectedTargetFilter();
+        $('#storeTargetsFilterInfo').text(`Showing ${targetFilterLabel(filter)} data`);
         startTargetLoading(storeName);
-        showBootstrapModal('storeTargetsModal');
 
         $.ajax({
             url: summaryRoute.replace('__ID__', storeId),
             method: 'GET',
             data: {
                 tables: 'salesman_target_details',
-                year: new Date().getFullYear(),
-                month: new Date().getMonth() + 1
+                date_from: filter.date_from,
+                date_to: filter.date_to
             },
             headers: { Accept: 'application/json' },
         })
@@ -1092,6 +1439,29 @@
         .fail((jqXHR, textStatus) => {
             showTargetFailure(textStatus || jqXHR?.responseJSON?.message || 'Failed to load target data.');
         });
+    }
+
+    $(document).on('click', '.js-view-targets', function () {
+        const storeId = $(this).data('store-id');
+        const storeName = $(this).data('store-name');
+
+        currentTargetStore = { id: storeId, name: storeName };
+        $('#storeTargetsLabel').text(`${storeName} - Salesman Targets`);
+        setDefaultTargetDateFilter();
+        showBootstrapModal('storeTargetsModal');
+        loadTargetsModalData(storeId, storeName);
+    });
+
+    $(document).on('click', '#applyStoreTargetsFilter', function () {
+        if (!currentTargetStore.id) return;
+        loadTargetsModalData(currentTargetStore.id, currentTargetStore.name);
+    });
+
+    $(document).on('click', '#resetStoreTargetsFilter', function () {
+        setDefaultTargetDateFilter();
+
+        if (!currentTargetStore.id) return;
+        loadTargetsModalData(currentTargetStore.id, currentTargetStore.name);
     });
 
     function renderChart(chartRows) {
@@ -1118,14 +1488,30 @@
         });
     }
 
+    function applyStoreCodeSort() {
+        applyLoadedStoreCodeSort();
+        refreshDashboardAggregates();
+        updateStoreCodeSortIcon();
+    }
+
     function loadOverview(forceRefresh = false) {
-        const url = forceRefresh ? `${overviewUrl}?refresh=1` : overviewUrl;
-        const tokenStatusUrl = forceRefresh ? `${tokenStatusRoute}?refresh=1` : tokenStatusRoute;
+        const quickParam = forceRefresh ? 'quick=1&refresh=1' : 'quick=1';
+        const url = `${overviewUrl}?${quickParam}`;
+        const tokenStatusUrl = forceRefresh
+            ? `${tokenStatusRoute}?refresh=1`
+            : tokenStatusRoute;
 
         setDashboardRefreshLoading(true);
         setDashboardDataLoading(true);
         clearTokenStateTimers();
         $('#dashboard-store-tbody').html(loadingRowMessage('preparing'));
+
+        const aggregateLoaderFallback = setTimeout(() => {
+            // If remote stores are taking longer, show the current partial totals instead of
+            // leaving the cards/chart in skeleton loading forever. Rows will keep updating.
+            refreshDashboardAggregates();
+            setDashboardDataLoading(false);
+        }, 8000);
 
         $.getJSON(tokenStatusUrl)
             .done((response) => {
@@ -1138,9 +1524,25 @@
                 $.getJSON(url)
                     .done((response) => {
                         const data = response?.data || {};
-                        renderCards(data.totals || {});
-                        renderTable(data.stores || []);
-                        renderChart(data.chart || []);
+                        const stores = data.stores || [];
+                        renderTable(stores);
+
+                        if (!stores.length) {
+                            clearTimeout(aggregateLoaderFallback);
+                            setDashboardDataLoading(false);
+                            setDashboardRefreshLoading(false);
+                            return;
+                        }
+
+                        refreshStoreRows(stores, forceRefresh)
+                            .always(() => {
+                                // Final guarantee after every store has either loaded or failed.
+                                applyLoadedStoreCodeSort();
+                                clearTimeout(aggregateLoaderFallback);
+                                clearTokenStateTimers();
+                                setDashboardDataLoading(false);
+                                setDashboardRefreshLoading(false);
+                            });
                     })
                     .fail(() => {
                         $('#dashboard-store-tbody').html('<tr><td colspan="16" class="text-center text-danger py-4">Failed to load dashboard overview.</td></tr>');
@@ -1150,8 +1552,7 @@
                             '#total-products', '#total-suppliers', '#today-sales-quick', '#yesterday-sales',
                             '#today-income-quick', '#yesterday-income', '#total-expenses'
                         ].forEach((selector) => $(selector).text('-'));
-                    })
-                    .always(() => {
+                        clearTimeout(aggregateLoaderFallback);
                         clearTokenStateTimers();
                         setDashboardDataLoading(false);
                         setDashboardRefreshLoading(false);
@@ -1186,8 +1587,8 @@
                         <div class="card bg-light border-0 shadow-sm">
                             <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
                                 <div>
-                                    <h5 class="mb-1">${storeName || 'Store'}</h5>
-                                    <p class="mb-0 text-muted">Store ID: ${storeId || '-'} | Last Updated: ${new Date().toLocaleString()}</p>
+                                    <h5 class="mb-1">${escapeHtml(storeName || 'Store')}</h5>
+                                    <p class="mb-0 text-muted">Store ID: ${storeId || '-'} | Code: ${escapeHtml(banner.banner_code || banner.banner?.banner_code || '-')} | Last Updated: ${new Date().toLocaleString()}</p>
                                 </div>
                                 <div class="badge bg-success px-3 py-2"><i class="ri-check-line me-1"></i> Connected</div>
                             </div>
@@ -1202,7 +1603,7 @@
                 <div class="row mb-4">
                     <div class="col-md-4 mb-3"><div class="card h-100 shadow-sm border-0"><div class="card-header bg-primary text-white"><h6 class="mb-0">Products</h6></div><div class="card-body text-center"><div class="display-6 text-primary mb-2">${integer(products.total_count || 0)}</div><p class="mb-0">Available Products</p></div></div></div>
                     <div class="col-md-4 mb-3"><div class="card h-100 shadow-sm border-0"><div class="card-header bg-info text-white"><h6 class="mb-0">Suppliers</h6></div><div class="card-body text-center"><div class="display-6 text-info mb-2">${integer(suppliers.total_count || 0)}</div><p class="mb-0">Registered Suppliers</p></div></div></div>
-                    <div class="col-md-4 mb-3"><div class="card h-100 shadow-sm border-0"><div class="card-header bg-warning text-white"><h6 class="mb-0">Banner</h6></div><div class="card-body text-center"><div class="display-6 text-warning mb-2">${integer(banner.total_count || 0)}</div>${banner.banner && banner.banner.banner_name ? `<div class="alert alert-light mt-3 mb-0"><strong>Current:</strong> ${banner.banner.banner_name}</div>` : '<p class="text-muted mb-0">No active banner</p>'}</div></div></div>
+                    <div class="col-md-4 mb-3"><div class="card h-100 shadow-sm border-0"><div class="card-header bg-warning text-white"><h6 class="mb-0">Banner</h6></div><div class="card-body text-center"><div class="display-6 text-warning mb-2">${integer(banner.total_count || 0)}</div>${banner.banner && (banner.banner.banner_name || banner.banner.banner_code) ? `<div class="alert alert-light mt-3 mb-0"><strong>Current:</strong> ${escapeHtml(banner.banner.banner_name || '-')}<br><strong>Code:</strong> ${escapeHtml(banner.banner.banner_code || banner.banner_code || '-')}</div>` : '<p class="text-muted mb-0">No active banner</p>'}</div></div></div>
                 </div>
                 <div class="row mb-2">
                     <div class="col-md-4 col-6 mb-3"><div class="card text-center shadow-sm border-0 h-100"><div class="card-body"><i class="ri-exchange-dollar-line fs-2 text-primary mb-2"></i><h5 class="mb-1">${integer(totalCount)}</h5><p class="mb-0 small text-muted">Transactions</p></div></div></div>
@@ -1268,7 +1669,18 @@
         $link.addClass('disabled action-loading').html(`<span class="spinner-border spinner-border-sm me-1"></span>${label}`);
     });
 
+    $(document).on('click', '.js-refresh-store', function (e) {
+        e.preventDefault();
+        refreshStoreRow($(this).data('store-id'), true);
+    });
+
+    $(document).on('click', '#dashboard-store-code-sort', function () {
+        storeCodeSortDirection = storeCodeSortDirection === 'asc' ? 'desc' : 'asc';
+        applyStoreCodeSort();
+    });
+
     $('#refresh-dashboard, #refresh-dashboard-table').on('click', () => loadOverview(true));
+    updateStoreCodeSortIcon();
     loadOverview();
 })();
 </script>

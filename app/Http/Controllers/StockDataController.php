@@ -64,6 +64,13 @@ class StockDataController extends Controller
                 $query['search'] = $request->input('search_product');
             }
 
+            // Pass filters to remote POS when supported. Local filtering remains as a fallback.
+            foreach (['filter_category', 'filter_type', 'filter_status'] as $filterKey) {
+                if ($request->filled($filterKey)) {
+                    $query[$filterKey] = $request->input($filterKey);
+                }
+            }
+
             // Handle ordering
             if ($request->has('order.0.column') && $request->has('order.0.dir')) {
                 $columnIndex = (int)$request->input('order.0.column');
@@ -239,11 +246,18 @@ class StockDataController extends Controller
             }
             
             $currentPageSummary['total_items'] = count($currentPageData);
+            $hasLocalFilters = filled($categoryFilter) || filled($typeFilter) || filled($stockStatusFilter);
+            $recordsFiltered = (int) (
+                $pageData['filtered_total']
+                ?? $pageData['records_filtered']
+                ?? $pageData['recordsFiltered']
+                ?? ($hasLocalFilters ? count($transformed) : $total)
+            );
 
             $payload = [
                 'draw' => $draw,
                 'recordsTotal' => $total,
-                'recordsFiltered' => count($transformed),
+                'recordsFiltered' => $recordsFiltered,
                 'data' => $transformed,
                 'all_data_summary' => $allDataSummary, // For top cards (ALL data)
                 'current_page_summary' => $currentPageSummary, // For footer (CURRENT page only)

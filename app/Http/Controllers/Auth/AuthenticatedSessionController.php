@@ -3,10 +3,8 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Services\StoreTokenSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -15,7 +13,7 @@ class AuthenticatedSessionController extends Controller
         return view('auth.login');
     }
 
-    public function store(Request $request, StoreTokenSyncService $storeTokenSyncService)
+    public function store(Request $request)
     {
         $request->validate([
             'email' => 'required|string|email',
@@ -29,20 +27,9 @@ class AuthenticatedSessionController extends Controller
         }
 
         $request->session()->regenerate();
-        $user = Auth::user();
 
-        $syncResults = $storeTokenSyncService->syncForUser(
-            $user->id,
-            $credentials['email'],
-            $credentials['password'],
-            true
-        );
-
-        Log::info('Store token sync completed after login.', [
-            'user_id' => $user->id,
-            'results' => $syncResults,
-        ]);
-
+        // Do not sync every remote store token during login.
+        // Tokens are refreshed lazily when each store row/API needs data, keeping login fast.
         return redirect()->intended(route('dashboard.index'));
     }
 

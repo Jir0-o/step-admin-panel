@@ -585,7 +585,7 @@ $(document).ready(function () {
           const base = '/stores/' + st.id + '/fetch-data?tables=cart_informtion';
           const url = NO_LIMIT ? base : base + '&limit=' + encodeURIComponent(REQUEST_LIMIT);
 
-          return $.ajax({ url, method: 'GET', dataType: 'json', timeout: 20000 })
+          return $.ajax({ url, method: 'GET', dataType: 'json', timeout: 90000 })
             .then(function (r) {
               const payload = r.results ? r : (r.data ? r.data : r);
               let arr = [];

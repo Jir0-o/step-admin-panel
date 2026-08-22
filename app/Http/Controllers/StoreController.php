@@ -56,6 +56,9 @@ class StoreController extends Controller
                 'user_password' => 'nullable|string|min:1|max:255',
             ]);
 
+            $data['base_url'] = $this->normalizeBaseUrl($data['base_url'] ?? null);
+            $data['login_api_url'] = $this->normalizePlainUrl($data['login_api_url'] ?? null);
+
             // IMPORTANT: do NOT encrypt here — model mutator will encrypt once
             // If user_password empty, leave as null so mutator won't set it
             if (empty($data['user_password'])) {
@@ -115,6 +118,9 @@ class StoreController extends Controller
                 'user_password' => 'nullable|string|min:1|max:255',
             ]);
 
+            $data['base_url'] = $this->normalizeBaseUrl($data['base_url'] ?? null);
+            $data['login_api_url'] = $this->normalizePlainUrl($data['login_api_url'] ?? null);
+
             // Do not encrypt here. If user_password present, model mutator will encrypt.
             if (empty($data['user_password'])) {
                 // don't change existing password if empty
@@ -151,6 +157,42 @@ class StoreController extends Controller
             Log::error('Store delete error: '.$e->getMessage());
             return response()->json(['ok' => false, 'message' => 'Failed to delete store'], 500);
         }
+    }
+
+
+    private function normalizePlainUrl(?string $url): ?string
+    {
+        $url = trim((string) $url);
+
+        if ($url === '') {
+            return null;
+        }
+
+        return rtrim(strtok($url, '?') ?: $url, '/');
+    }
+
+    private function normalizeBaseUrl(?string $url): ?string
+    {
+        $url = $this->normalizePlainUrl($url);
+
+        if (! $url) {
+            return null;
+        }
+
+        $knownApiSuffixes = [
+            '/api/manager/data/summary',
+            '/api/manager/data/final-stock-data',
+            '/api/backoffice/login',
+            '/api/login',
+        ];
+
+        foreach ($knownApiSuffixes as $suffix) {
+            if (str_ends_with(strtolower($url), strtolower($suffix))) {
+                return rtrim(substr($url, 0, -strlen($suffix)), '/');
+            }
+        }
+
+        return $url;
     }
 
     public function sync(

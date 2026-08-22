@@ -57,7 +57,7 @@
                         <div class="form-group mb-3">
                             <label for="url">Base URL</label>
                             <input class="form-control" type="url" name="base_url" id="base_url"
-                                   placeholder="https://example.com/public/backoffice">
+                                   placeholder="https://example.com/public">
                         </div>
                     </div>
 
@@ -137,8 +137,8 @@ $(function () {
         }
 
         stores.forEach(function(store, idx) {
-            const baseUrl = store.base_url ? `<a href="${store.base_url}" target="_blank">${store.base_url}</a>` : '-';
-            const loginApi = store.login_api_url ? `<a href="${store.login_api_url}" target="_blank">${store.login_api_url}</a>` : '-';
+            const baseUrl = safeLink(store.base_url);
+            const loginApi = safeLink(store.login_api_url);
             tbody.append(`
                 <tr data-id="${store.id}">
                     <td class="text-center">${(idx+1).toString().padStart(2,'0')}</td>
@@ -159,6 +159,18 @@ $(function () {
         if (!text) return '';
         return String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
                            .replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+    }
+
+    function safeLink(url) {
+        if (!url) return '-';
+        const raw = String(url);
+        const safe = escapeHtml(raw);
+
+        if (!/^https?:\/\//i.test(raw)) {
+            return safe;
+        }
+
+        return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a>`;
     }
 
     $('#btnOpenCreate').on('click', function() {

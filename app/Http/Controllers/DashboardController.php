@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Services\StoreOverviewService;
 use App\Services\StoreTokenSyncService;
 use App\Services\StoreTokenService;
+use App\Models\Store;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
@@ -28,16 +30,32 @@ class DashboardController extends Controller
     {
         $userId = (int) Auth::id();
         $forceRefresh = request()->boolean('refresh');
+        $quick = request()->boolean('quick');
 
-        if ($forceRefresh) {
-            $this->storeTokenSyncService->syncForUser($userId, null, null, true);
-        }
-
-        $payload = $this->storeOverviewService->getOverviewForUser($userId, $forceRefresh);
+        $payload = $this->storeOverviewService->getOverviewForUser(
+            $userId,
+            $forceRefresh,
+            $quick
+        );
 
         return response()->json([
             'ok' => true,
             'data' => $payload,
+        ]);
+    }
+
+    public function overviewStore(Store $store): JsonResponse
+    {
+        $row = $this->storeOverviewService->getStoreOverviewForUser(
+            $store,
+            (int) Auth::id(),
+            request()->boolean('refresh')
+        );
+
+        return response()->json([
+            'ok' => (bool) ($row['ok'] ?? false),
+            'message' => $row['message'] ?? null,
+            'data' => $row,
         ]);
     }
 
@@ -56,7 +74,7 @@ class DashboardController extends Controller
     {
     }
 
-    public function store(\Illuminate\Http\Request $request)
+    public function store(Request $request)
     {
     }
 
@@ -68,7 +86,7 @@ class DashboardController extends Controller
     {
     }
 
-    public function update(\Illuminate\Http\Request $request, string $id)
+    public function update(Request $request, string $id)
     {
     }
 
