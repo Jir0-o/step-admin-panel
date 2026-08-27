@@ -91,7 +91,6 @@
                 </div>
             </div>
         </div>
-        @include('backend.partials.footer')
     </section>
 
     <script>
