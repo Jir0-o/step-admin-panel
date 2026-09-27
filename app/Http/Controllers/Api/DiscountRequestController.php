@@ -290,11 +290,25 @@ class DiscountRequestController extends Controller
         ];
 
         if ($dr->pos_callback_url) {
-            try {
-                $res = Http::timeout(5)->post($dr->pos_callback_url, $callbackPayload);
-                Log::info('Discount callback to POS', ['url' => $dr->pos_callback_url, 'status' => $res->status()]);
-            } catch (\Throwable $ex) {
-                Log::error('Discount callback failed', ['err' => $ex->getMessage(), 'url' => $dr->pos_callback_url]);
+            $secret = trim((string) env('MOTHER_POS_SHARED_SECRET', ''));
+
+            if ($secret === '') {
+                Log::info('Discount callback skipped: MOTHER_POS_SHARED_SECRET is not configured.', [
+                    'url' => $dr->pos_callback_url,
+                    'request_id' => $dr->id,
+                ]);
+            } else {
+                try {
+                    $jsonBody = json_encode($callbackPayload);
+                    $signature = hash_hmac('sha256', $jsonBody, $secret);
+                    $res = Http::timeout(5)
+                        ->withHeaders(['X-SIGNATURE' => $signature])
+                        ->withBody($jsonBody, 'application/json')
+                        ->post($dr->pos_callback_url);
+                    Log::info('Authenticated discount callback to POS', ['url' => $dr->pos_callback_url, 'status' => $res->status()]);
+                } catch (\Throwable $ex) {
+                    Log::error('Discount callback failed', ['err' => $ex->getMessage(), 'url' => $dr->pos_callback_url]);
+                }
             }
         }
 
@@ -403,22 +417,24 @@ class DiscountRequestController extends Controller
             'items' => $dr->items_json
         ];
 
-        // send HMAC signature header if shared secret is configured
+        // Callback is optional, but if it is used it must be authenticated.
         $posUrl = $dr->pos_callback_url;
         if ($posUrl) {
-            try {
-                $secret = env('MOTHER_POS_SHARED_SECRET', null);
-                $jsonBody = json_encode($callbackPayload);
-                $signature = $secret ? hash_hmac('sha256', $jsonBody, $secret) : null;
-
-                $client = Http::timeout(5);
-                if ($signature) {
-                    $client = $client->withHeaders(['X-SIGNATURE' => $signature]);
+            $secret = trim((string) env('MOTHER_POS_SHARED_SECRET', ''));
+            if ($secret !== '') {
+                try {
+                    $jsonBody = json_encode($callbackPayload);
+                    $signature = hash_hmac('sha256', $jsonBody, $secret);
+                    $res = Http::timeout(5)
+                        ->withHeaders(['X-SIGNATURE' => $signature])
+                        ->withBody($jsonBody, 'application/json')
+                        ->post($posUrl);
+                    Log::info('Authenticated discount callback to POS', ['url'=>$posUrl,'status'=>$res->status()]);
+                } catch (\Throwable $ex) {
+                    Log::error('Discount callback failed', ['err'=>$ex->getMessage(),'url'=>$posUrl]);
                 }
-                $res = $client->post($posUrl, $callbackPayload);
-                Log::info('Discount callback to POS', ['url'=>$posUrl,'status'=>$res->status(),'body'=>$callbackPayload]);
-            } catch (\Throwable $ex) {
-                Log::error('Discount callback failed', ['err'=>$ex->getMessage(),'url'=>$posUrl,'body'=>$callbackPayload]);
+            } else {
+                Log::info('Discount callback skipped: MOTHER_POS_SHARED_SECRET is not configured.', ['url'=>$posUrl]);
             }
         }
 

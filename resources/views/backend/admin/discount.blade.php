@@ -189,7 +189,7 @@
 <script>
 $(function(){
 
-  const API_BASE = '/api/discount-requests';
+  const API_BASE = @json(route('discount.api.index')); // authenticated web/session route
   const DT_URL   = API_BASE;
 
   function formatCurrency(n){

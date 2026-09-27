@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\RolePermissionController;
 use App\Http\Controllers\StockDataController;
 use App\Http\Controllers\StoreRouteController;
+use App\Http\Controllers\Api\DiscountRequestController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -59,7 +60,19 @@ Route::middleware([
         ->middleware('permission:view_discount')
         ->name('discount.index');
 
-    Route::view('/user', 'backend.admin.user')
+    // Same-origin admin JSON endpoints. These use the normal authenticated web
+    // session, while /api/discount-requests is reserved for Bearer-auth clients.
+    Route::prefix('discount-api/requests')
+        ->middleware('permission:view_discount')
+        ->group(function () {
+            Route::get('/', [DiscountRequestController::class, 'index'])->name('discount.api.index');
+            Route::get('/{id}', [DiscountRequestController::class, 'show'])->name('discount.api.show');
+            Route::patch('/{id}/approve', [DiscountRequestController::class, 'approve'])->name('discount.api.approve');
+            Route::patch('/{id}/reject', [DiscountRequestController::class, 'reject'])->name('discount.api.reject');
+            Route::delete('/{id}/delete', [DiscountRequestController::class, 'destroy'])->name('discount.api.delete');
+        });
+
+    Route::get('/user', [UserController::class, 'index'])
         ->middleware('permission:manage_users')
         ->name('user.index');
 

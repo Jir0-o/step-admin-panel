@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
@@ -38,7 +37,8 @@ class SanctumAuthController extends Controller
             $validateUser = Validator::make($request->all(),
             [
                 'email' => 'required|email',
-                'password' => 'required'
+                'password' => 'required',
+                'client_name' => 'nullable|string|max:80'
             ]);
 
             if($validateUser->fails()){
@@ -49,19 +49,29 @@ class SanctumAuthController extends Controller
                 ], 401);
             }
 
-            if(!Auth::attempt($request->only(['email', 'password']))){
+            $user = User::where('email', $request->email)->first();
+
+            if (! $user || ! Hash::check((string) $request->password, (string) $user->password)) {
                 return response()->json([
                     'status' => false,
                     'message' => 'Email & Password does not match with our record.',
                 ], 401);
             }
 
-            $user = User::where('email', $request->email)->first();
+            $clientName = trim((string) $request->input('client_name', 'API TOKEN'));
+            if ($clientName === '') {
+                $clientName = 'API TOKEN';
+            }
+
+            // One active token per named client prevents an unlimited pile of
+            // tokens when a POS refreshes authentication after a restart/401.
+            $user->tokens()->where('name', $clientName)->delete();
 
             return response()->json([
                 'status' => true,
                 'message' => 'User Logged In Successfully',
-                'token' => $user->createToken("API TOKEN")->plainTextToken
+                'token_type' => 'Bearer',
+                'token' => $user->createToken($clientName)->plainTextToken
             ], 200);
 
         } catch (\Throwable $th) {
